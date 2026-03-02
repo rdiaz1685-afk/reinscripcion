@@ -1,0 +1,68 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Datos del ciclo escolar 25-26 (base de alumnos actual)
+model Alumno25_26 {
+  id        String   @id @default(cuid())
+  matricula String   @unique
+  unidad    String
+  grado     String
+  nombre    String
+  grupo     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Datos del ciclo escolar 26-27 (estado de reinscripción)
+model Alumno26_27 {
+  id              String    @id @default(cuid())
+  matricula       String    @unique
+  unidad          String
+  grado           String
+  nombre          String
+  estatus         String    // Reinscrito, Pendiente, Baja, Inscrito, Proceso
+  fechaEstatus    DateTime?
+  comentario      String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// Metas de reinscripción
+model MetaReinscripcion {
+  id        String   @id @default(cuid())
+  tipo      String   // "global" o "grupo"
+  grupo     String?  // null para meta global, nombre del grupo para meta específica
+  meta      Int      // Número objetivo de reinscritos
+  tipoMeta  String?  @default("numero") // "numero" o "porcentaje"
+  valorMeta Float?   @default(0) // Valor de la meta
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tipo, grupo])
+}
+
+// Vista consolidada de alumnos con clasificación
+model AlumnoClasificado {
+  id                  String   @id @default(cuid())
+  matricula           String   @unique
+  nombre              String
+  grupo               String   // Del reporte 25-26
+  grado               String
+  unidad              String
+  estatus             String   // Del reporte 26-27
+  fechaEstatus        DateTime?
+  comentario          String?
+  clasificacion       String   // Reinscrito, Baja Transferencia, Baja Real, Por Reinscribir, Nuevo
+  fechaClasificacion  DateTime @default(now())
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
