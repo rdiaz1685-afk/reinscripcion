@@ -107,7 +107,7 @@ export default function Dashboard() {
   const [metaTipo, setMetaTipo] = useState<'global' | 'grupo'>('global')
   const [metaValorTipo, setMetaValorTipo] = useState<'numero' | 'porcentaje'>('porcentaje')
   const [activeTab, setActiveTab] = useState('dashboard')
-  
+
   // Estados para subir archivos
   const [selectedFile2526, setSelectedFile2526] = useState<File | null>(null)
   const [selectedFile2627, setSelectedFile2627] = useState<File | null>(null)
@@ -159,20 +159,20 @@ export default function Dashboard() {
   // Función para subir archivo 25-26
   const handleUpload2526 = async () => {
     if (!selectedFile2526) return
-    
+
     setUploading(true)
-    
+
     const formData = new FormData()
     formData.append('file', selectedFile2526)
     formData.append('tipo', '25-26')
-    
+
     try {
       const res = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       })
       const data = await res.json()
-      
+
       if (res.ok) {
         alert(`✅ ${data.message}\n\nTamaño: ${(data.size / 1024).toFixed(2)} KB`)
         setSelectedFile2526(null)
@@ -191,20 +191,20 @@ export default function Dashboard() {
   // Función para subir archivo 26-27
   const handleUpload2627 = async () => {
     if (!selectedFile2627) return
-    
+
     setUploading(true)
-    
+
     const formData = new FormData()
     formData.append('file', selectedFile2627)
     formData.append('tipo', '26-27')
-    
+
     try {
       const res = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       })
       const data = await res.json()
-      
+
       if (res.ok) {
         alert(`✅ ${data.message}\n\nTamaño: ${(data.size / 1024).toFixed(2)} KB`)
         setSelectedFile2627(null)
@@ -266,7 +266,7 @@ export default function Dashboard() {
 
   const guardarMeta = async () => {
     if (!nuevaMeta) return
-    
+
     try {
       const res = await fetch('/api/metas', {
         method: 'POST',
@@ -340,10 +340,10 @@ export default function Dashboard() {
 
   const getMetaInfo = () => {
     if (!metricas) return null
-    
+
     const { resumen } = metricas
     const tieneMeta = resumen.meta > 0
-    
+
     if (!tieneMeta) {
       return {
         labelMeta: 'Sin definir',
@@ -352,12 +352,12 @@ export default function Dashboard() {
         textoFaltantes: ''
       }
     }
-    
+
     if (resumen.tipoMeta === 'porcentaje') {
       const porcentajeObjetivo = resumen.valorMeta
       const porcentajeActual = resumen.porcentajeActual
       const progreso = Math.min(100, (porcentajeActual / porcentajeObjetivo) * 100)
-      
+
       return {
         labelMeta: `${porcentajeObjetivo}% (${resumen.meta} alumnos)`,
         progreso: progreso,
@@ -373,7 +373,7 @@ export default function Dashboard() {
       }
     }
   }
-  
+
   const metaInfo = getMetaInfo()
 
   return (
@@ -392,7 +392,7 @@ export default function Dashboard() {
               <p className="text-sm text-slate-500">Ciclo Escolar 2025-2026 → 2026-2027</p>
             </div>
           </div>
-          
+
           {importStatus && (
             <div className="flex items-center gap-4 text-sm text-slate-600 dark:text-slate-400">
               <span className="flex items-center gap-1">
@@ -439,13 +439,13 @@ export default function Dashboard() {
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 <Card className="bg-gradient-to-br from-slate-900 to-slate-800 text-white">
                   <CardHeader className="pb-2">
-                    <CardDescription className="text-slate-300">Total Alumnos</CardDescription>
+                    <CardDescription className="text-slate-300">Total a Reinscribir</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="text-3xl font-bold">{metricas.resumen.total}</div>
                   </CardContent>
                 </Card>
-                
+
                 <Card className="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white">
                   <CardHeader className="pb-2">
                     <CardDescription className="text-emerald-100">Reinscritos</CardDescription>
@@ -457,7 +457,7 @@ export default function Dashboard() {
                     </div>
                   </CardContent>
                 </Card>
-                
+
                 <Card className="bg-gradient-to-br from-amber-500 to-orange-500 text-white">
                   <CardHeader className="pb-2">
                     <CardDescription className="text-amber-100">Transferencias</CardDescription>
@@ -467,7 +467,7 @@ export default function Dashboard() {
                     <div className="text-sm text-amber-100">Cambios de campus</div>
                   </CardContent>
                 </Card>
-                
+
                 <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white">
                   <CardHeader className="pb-2">
                     <CardDescription className="text-red-100">Bajas Reales</CardDescription>
@@ -477,7 +477,7 @@ export default function Dashboard() {
                     <div className="text-sm text-red-100">Salidas definitivas</div>
                   </CardContent>
                 </Card>
-                
+
                 <Card className="bg-gradient-to-br from-slate-500 to-slate-600 text-white">
                   <CardHeader className="pb-2">
                     <CardDescription className="text-slate-200">Por Reinscribir</CardDescription>
@@ -487,7 +487,7 @@ export default function Dashboard() {
                     <div className="text-sm text-slate-200">Pendientes</div>
                   </CardContent>
                 </Card>
-                
+
                 <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
                   <CardHeader className="pb-2">
                     <CardDescription className="text-blue-100">Nuevos</CardDescription>
@@ -531,7 +531,7 @@ export default function Dashboard() {
                         <div className="space-y-2">
                           <Label>Alcance de la Meta</Label>
                           <div className="flex gap-2">
-                            <Button 
+                            <Button
                               variant={metaTipo === 'global' ? 'default' : 'outline'}
                               size="sm"
                               onClick={() => setMetaTipo('global')}
@@ -539,7 +539,7 @@ export default function Dashboard() {
                             >
                               Global (Campus)
                             </Button>
-                            <Button 
+                            <Button
                               variant={metaTipo === 'grupo' ? 'default' : 'outline'}
                               size="sm"
                               onClick={() => setMetaTipo('grupo')}
@@ -549,11 +549,11 @@ export default function Dashboard() {
                             </Button>
                           </div>
                         </div>
-                        
+
                         {metaTipo === 'grupo' && (
                           <div className="space-y-2">
                             <Label>Seleccionar Grupo</Label>
-                            <select 
+                            <select
                               className="w-full border rounded-md p-2"
                               value={metaGrupo}
                               onChange={(e) => setMetaGrupo(e.target.value)}
@@ -565,11 +565,11 @@ export default function Dashboard() {
                             </select>
                           </div>
                         )}
-                        
+
                         <div className="space-y-2">
                           <Label>Tipo de Meta</Label>
                           <div className="flex gap-2">
-                            <Button 
+                            <Button
                               variant={metaValorTipo === 'porcentaje' ? 'default' : 'outline'}
                               size="sm"
                               onClick={() => setMetaValorTipo('porcentaje')}
@@ -578,7 +578,7 @@ export default function Dashboard() {
                               <Percent className="h-4 w-4 mr-1" />
                               Porcentaje
                             </Button>
-                            <Button 
+                            <Button
                               variant={metaValorTipo === 'numero' ? 'default' : 'outline'}
                               size="sm"
                               onClick={() => setMetaValorTipo('numero')}
@@ -589,16 +589,16 @@ export default function Dashboard() {
                             </Button>
                           </div>
                         </div>
-                        
+
                         <div className="space-y-2">
                           <Label>
-                            {metaValorTipo === 'porcentaje' 
-                              ? 'Meta de Reinscripción (%)' 
+                            {metaValorTipo === 'porcentaje'
+                              ? 'Meta de Reinscripción (%)'
                               : 'Meta de Reinscripción (alumnos)'}
                           </Label>
                           <div className="relative">
-                            <Input 
-                              type="number" 
+                            <Input
+                              type="number"
                               value={nuevaMeta}
                               onChange={(e) => setNuevaMeta(e.target.value)}
                               placeholder={metaValorTipo === 'porcentaje' ? 'Ej: 85' : 'Ej: 300'}
@@ -614,21 +614,21 @@ export default function Dashboard() {
                             </p>
                           )}
                         </div>
-                        
+
                         {nuevaMeta && (
                           <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-3">
                             <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
                               Vista previa:
                             </p>
                             <p className="text-sm text-slate-600 dark:text-slate-400">
-                              Meta: {metaValorTipo === 'porcentaje' 
+                              Meta: {metaValorTipo === 'porcentaje'
                                 ? `${nuevaMeta}% de reinscripción`
                                 : `${nuevaMeta} alumnos reinscritos`}
                             </p>
                             {metaValorTipo === 'porcentaje' && metricas && (
                               <p className="text-xs text-slate-500 mt-1">
-                                Equivale a {Math.round((parseFloat(nuevaMeta) / 100) * 
-                                  (metaTipo === 'grupo' 
+                                Equivale a {Math.round((parseFloat(nuevaMeta) / 100) *
+                                  (metaTipo === 'grupo'
                                     ? (metricas.porGrupo.find(g => g.grupo === metaGrupo)?.total || 0)
                                     : metricas.resumen.total))} alumnos
                               </p>
@@ -640,8 +640,8 @@ export default function Dashboard() {
                         <Button variant="outline" onClick={() => setMetaDialogOpen(false)}>
                           Cancelar
                         </Button>
-                        <Button 
-                          onClick={guardarMeta} 
+                        <Button
+                          onClick={guardarMeta}
                           disabled={!nuevaMeta || (metaTipo === 'grupo' && !metaGrupo)}
                         >
                           Guardar Meta
@@ -665,28 +665,28 @@ export default function Dashboard() {
                         Meta: <strong className="text-blue-600">{metaInfo.labelMeta}</strong>
                       </span>
                     </div>
-                    
+
                     <div className="space-y-2">
                       <div className="flex justify-between text-sm">
                         <span>Progreso actual</span>
                         <span className="font-medium">
-                          {metricas.resumen.tipoMeta === 'porcentaje' 
+                          {metricas.resumen.tipoMeta === 'porcentaje'
                             ? `${metricas.resumen.porcentajeActual}% de ${metricas.resumen.valorMeta}%`
                             : `${metricas.resumen.porcentajeCumplimiento}%`}
                         </span>
                       </div>
-                      <Progress 
-                        value={metaInfo.progreso} 
+                      <Progress
+                        value={metaInfo.progreso}
                         className="h-3"
                       />
                     </div>
-                    
+
                     <div className="flex items-center justify-between">
-                      <Badge 
+                      <Badge
                         variant={metaInfo.progreso >= 100 ? 'default' : 'secondary'}
                         className={metaInfo.progreso >= 100 ? 'bg-emerald-500' : ''}
                       >
-                        {metricas.resumen.tipoMeta === 'porcentaje' 
+                        {metricas.resumen.tipoMeta === 'porcentaje'
                           ? `${Math.round(metaInfo.progreso)}% de la meta`
                           : `${metricas.resumen.porcentajeCumplimiento}% de cumplimiento`}
                       </Badge>
@@ -745,8 +745,8 @@ export default function Dashboard() {
                     <div className="flex flex-wrap justify-center gap-4 mt-4">
                       {pieData.map((entry, index) => (
                         <div key={index} className="flex items-center gap-2">
-                          <div 
-                            className="w-3 h-3 rounded-full" 
+                          <div
+                            className="w-3 h-3 rounded-full"
                             style={{ backgroundColor: entry.fill }}
                           />
                           <span className="text-sm text-slate-600 dark:text-slate-400">
@@ -772,7 +772,7 @@ export default function Dashboard() {
                           <CartesianGrid strokeDasharray="3 3" />
                           <XAxis type="number" />
                           <YAxis dataKey="grupo" type="category" width={60} tick={{ fontSize: 11 }} />
-                          <ChartTooltip 
+                          <ChartTooltip
                             content={({ active, payload, label }) => {
                               if (active && payload && payload.length) {
                                 const data = payload[0].payload;
@@ -802,23 +802,23 @@ export default function Dashboard() {
                               return null;
                             }}
                           />
-                          <Bar 
-                            dataKey="reinscritos" 
-                            stackId="a" 
-                            fill={COLORS.reinscritos} 
+                          <Bar
+                            dataKey="reinscritos"
+                            stackId="a"
+                            fill={COLORS.reinscritos}
                             name="Reinscritos"
                             radius={[0, 0, 0, 0]}
                           />
-                          <Bar 
-                            dataKey="pendientes" 
-                            stackId="a" 
-                            fill={COLORS.porReinscribir} 
+                          <Bar
+                            dataKey="pendientes"
+                            stackId="a"
+                            fill={COLORS.porReinscribir}
                             name="Pendientes"
                           />
-                          <Bar 
-                            dataKey="bajas" 
-                            stackId="a" 
-                            fill={COLORS.bajasReales} 
+                          <Bar
+                            dataKey="bajas"
+                            stackId="a"
+                            fill={COLORS.bajasReales}
                             name="Bajas"
                             radius={[0, 4, 4, 0]}
                           />
@@ -870,8 +870,8 @@ export default function Dashboard() {
                     Análisis detallado del avance de reinscripción por cada grupo
                   </CardDescription>
                 </div>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={exportarPDF}
                   disabled={exportingPdf || !metricas || metricas.porGrupo.length === 0}
@@ -985,20 +985,20 @@ export default function Dashboard() {
                         <YAxis yAxisId="left" />
                         <YAxis yAxisId="right" orientation="right" />
                         <ChartTooltip content={<ChartTooltipContent />} />
-                        <Line 
+                        <Line
                           yAxisId="left"
-                          type="monotone" 
-                          dataKey="cantidad" 
-                          stroke="#22c55e" 
+                          type="monotone"
+                          dataKey="cantidad"
+                          stroke="#22c55e"
                           strokeWidth={2}
                           dot={{ fill: '#22c55e', r: 4 }}
                           name="Diario"
                         />
-                        <Line 
+                        <Line
                           yAxisId="right"
-                          type="monotone" 
-                          dataKey="acumulado" 
-                          stroke="#3b82f6" 
+                          type="monotone"
+                          dataKey="acumulado"
+                          stroke="#3b82f6"
                           strokeWidth={2}
                           dot={{ fill: '#3b82f6', r: 4 }}
                           name="Acumulado"
@@ -1031,7 +1031,7 @@ export default function Dashboard() {
                     </div>
                   </CardContent>
                 </Card>
-                
+
                 <Card>
                   <CardContent className="pt-6">
                     <div className="flex items-center gap-3">
@@ -1045,7 +1045,7 @@ export default function Dashboard() {
                     </div>
                   </CardContent>
                 </Card>
-                
+
                 <Card>
                   <CardContent className="pt-6">
                     <div className="flex items-center gap-3">
@@ -1055,8 +1055,8 @@ export default function Dashboard() {
                       <div>
                         <p className="text-sm text-slate-500">Promedio Diario</p>
                         <p className="text-2xl font-bold">
-                          {metricas.timeline.length > 0 
-                            ? Math.round(metricas.resumen.reinscritos / metricas.timeline.length) 
+                          {metricas.timeline.length > 0
+                            ? Math.round(metricas.resumen.reinscritos / metricas.timeline.length)
                             : 0}
                         </p>
                       </div>
@@ -1117,7 +1117,7 @@ export default function Dashboard() {
                             className="hidden"
                             id="file-25-26-upload"
                           />
-                          <label 
+                          <label
                             htmlFor="file-25-26-upload"
                             className="cursor-pointer"
                           >
@@ -1128,8 +1128,8 @@ export default function Dashboard() {
                               </span>
                             </div>
                           </label>
-                          <Button 
-                            onClick={handleUpload2526} 
+                          <Button
+                            onClick={handleUpload2526}
                             disabled={uploading || !selectedFile2526}
                             className="w-full bg-emerald-500 hover:bg-emerald-600"
                           >
@@ -1168,7 +1168,7 @@ export default function Dashboard() {
                             className="hidden"
                             id="file-26-27-upload"
                           />
-                          <label 
+                          <label
                             htmlFor="file-26-27-upload"
                             className="cursor-pointer"
                           >
@@ -1179,8 +1179,8 @@ export default function Dashboard() {
                               </span>
                             </div>
                           </label>
-                          <Button 
-                            onClick={handleUpload2627} 
+                          <Button
+                            onClick={handleUpload2627}
                             disabled={uploading || !selectedFile2627}
                             className="w-full bg-blue-500 hover:bg-blue-600"
                           >
@@ -1223,8 +1223,8 @@ export default function Dashboard() {
 
                 {/* Acciones de procesamiento */}
                 <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">
-                  <Button 
-                    onClick={() => importarDatos('25-26')} 
+                  <Button
+                    onClick={() => importarDatos('25-26')}
                     disabled={loading}
                     variant="outline"
                   >
@@ -1235,8 +1235,8 @@ export default function Dashboard() {
                     )}
                     Importar 25-26
                   </Button>
-                  <Button 
-                    onClick={() => importarDatos('26-27')} 
+                  <Button
+                    onClick={() => importarDatos('26-27')}
                     disabled={loading}
                     variant="outline"
                   >
@@ -1247,8 +1247,8 @@ export default function Dashboard() {
                     )}
                     Importar 26-27
                   </Button>
-                  <Button 
-                    onClick={procesarDatos} 
+                  <Button
+                    onClick={procesarDatos}
                     disabled={loading || !importStatus || (importStatus.alumnos_25_26 === 0 && importStatus.alumnos_26_27 === 0)}
                     className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
                   >
@@ -1305,13 +1305,13 @@ export default function Dashboard() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right font-semibold">
-                            {meta.tipoMeta === 'porcentaje' 
+                            {meta.tipoMeta === 'porcentaje'
                               ? `${meta.valorMeta}% (${meta.meta} alumnos)`
                               : `${meta.meta} alumnos`}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button 
-                              variant="ghost" 
+                            <Button
+                              variant="ghost"
                               size="sm"
                               onClick={async () => {
                                 await fetch(`/api/metas?id=${meta.id}`, { method: 'DELETE' })
