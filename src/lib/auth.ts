@@ -10,16 +10,20 @@ export const authOptions: NextAuthOptions = {
             clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
         }),
     ],
+    secret: process.env.NEXTAUTH_SECRET,
     callbacks: {
         async signIn({ user }) {
+            console.log("Intentando signIn para:", user.email);
             const authorized = getAuthorizedUser(user.email);
+            console.log("Resultado autorización:", authorized ? "AUTORIZADO" : "DENEGADO");
             if (authorized) {
                 return true;
             }
-            return false; // Bloquea el acceso si no está en la lista o el dominio es incorrecto
+            return false;
         },
         async jwt({ token, user, account }) {
             if (user) {
+                console.log("Generando JWT para:", user.email);
                 const authorized = getAuthorizedUser(user.email);
                 if (authorized) {
                     token.rol = authorized.rol;
@@ -29,6 +33,7 @@ export const authOptions: NextAuthOptions = {
             return token;
         },
         async session({ session, token }) {
+            console.log("Generando sesión para:", session.user?.email);
             if (session.user) {
                 (session.user as any).rol = token.rol;
                 (session.user as any).unidad = token.unidad;
@@ -37,9 +42,10 @@ export const authOptions: NextAuthOptions = {
         },
     },
     pages: {
-        signIn: "/", // Redirigir a la raíz para el login
-        error: "/",  // Redirigir a la raíz en caso de error de auth
+        signIn: "/",
+        error: "/",
     },
+    debug: true, // Activa el modo debug de NextAuth para ver más detalles en los logs de Railway
 };
 
 export default NextAuth(authOptions);
