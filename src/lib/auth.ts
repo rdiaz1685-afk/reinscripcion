@@ -10,17 +10,17 @@ export const authOptions: NextAuthOptions = {
             clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
         }),
     ],
-    secret: process.env.NEXTAUTH_SECRET || "cambridge-mty-secret-fallback-2026",
-    trustHost: true,
+    secret: process.env.NEXTAUTH_SECRET,
     callbacks: {
         async signIn({ user }) {
-            console.log("DEBUG: Intentando entrar con:", user.email);
+            console.log("=== NEXTAUTH DEBUG: SIGNIN ===");
+            console.log("Email:", user.email);
             const authorized = getAuthorizedUser(user.email);
             if (authorized) {
-                console.log("DEBUG: Usuario autorizado con éxito");
+                console.log("Status: AUTHORIZED");
                 return true;
             }
-            console.log("DEBUG: Usuario NO encontrado en la lista");
+            console.log("Status: DENIED");
             return false;
         },
         async jwt({ token, user }) {
@@ -45,7 +45,7 @@ export const authOptions: NextAuthOptions = {
         signIn: "/",
         error: "/",
     },
-    debug: process.env.NODE_ENV === 'development' ? false : true,
+    debug: true,
 };
 
 export default NextAuth(authOptions);
