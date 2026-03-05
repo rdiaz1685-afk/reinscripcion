@@ -31,11 +31,8 @@ RUN mkdir -p /app/upload /app/tmp
 # Build de Next.js
 RUN bun run build
 
-# Exponer puerto
-EXPOSE 3000
-
+# Exponer el puerto que Railway asigne automáticamente
 ENV NODE_ENV=production
-ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 # Comando de inicio
