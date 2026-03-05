@@ -1,6 +1,7 @@
 
 import NextAuth, { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import CredentialsProvider from "next-auth/providers/credentials";
 import { getAuthorizedUser } from "./auth-config";
 
 export const authOptions: NextAuthOptions = {
@@ -9,6 +10,31 @@ export const authOptions: NextAuthOptions = {
             clientId: process.env.GOOGLE_CLIENT_ID || "",
             clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
         }),
+        CredentialsProvider({
+            name: "Credenciales",
+            credentials: {
+                email: { label: "Email", type: "email" },
+                password: { label: "Contraseña", type: "password" }
+            },
+            async authorize(credentials) {
+                if (!credentials?.email || !credentials?.password) return null;
+
+                // 1. Validar la contraseña maestra (definida en Railway)
+                const masterPassword = process.env.ADMIN_PASSWORD || "Cambridge2026!";
+                if (credentials.password !== masterPassword) return null;
+
+                // 2. Validar que el usuario esté en la lista de autorizados
+                const authorized = getAuthorizedUser(credentials.email);
+                if (authorized) {
+                    return {
+                        id: credentials.email,
+                        email: credentials.email,
+                        name: credentials.email.split('@')[0],
+                    };
+                }
+                return null;
+            }
+        })
     ],
     secret: process.env.NEXTAUTH_SECRET || "cambridge-mty-reinscripcion-secret-2026",
     callbacks: {
