@@ -250,11 +250,16 @@ def main():
         print("Uso: python generate_report_pdf.py <json_data> <output_path>")
         sys.exit(1)
     
-    json_data = sys.argv[1]
+    json_input = sys.argv[1]
     output_path = sys.argv[2]
     
     try:
-        data = json.loads(json_data)
+        if os.path.exists(json_input):
+            with open(json_input, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        else:
+            data = json.loads(json_input)
+            
         result_path = create_pdf(data, output_path)
         print(f"PDF generado exitosamente: {result_path}")
     except Exception as e:

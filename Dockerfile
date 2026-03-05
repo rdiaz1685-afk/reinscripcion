@@ -23,8 +23,7 @@ COPY . .
 
 # Generar Prisma
 RUN bun run db:generate
-ENV DATABASE_URL="file:/app/prisma/dev.db"
-RUN bun run db:push
+# RUN bun run db:push # Opcional: Esto fallará si no hay DB en el build stage, se recomienda correrlo en el CMD o manualmente
 
 # Crear carpetas necesarias
 RUN mkdir -p /app/upload /app/tmp

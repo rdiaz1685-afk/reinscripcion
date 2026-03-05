@@ -4,15 +4,25 @@ import { db } from '@/lib/db';
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const filtro = searchParams.get('filtro'); // 'grupo' o null para general
+    const unidad = searchParams.get('unidad');
+    const mes = searchParams.get('mes') ? parseInt(searchParams.get('mes')!) : new Date().getMonth() + 1;
 
-    // Obtener todos los alumnos clasificados
-    const alumnos = await db.alumnoClasificado.findMany();
+    // Función para normalizar texto (quitar acentos y pasar a mayúsculas)
+    const normalizeText = (text: string) =>
+      text?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase() || "";
 
-    // Obtener todas las metas de una vez
-    const todasMetas = await db.metaReinscripcion.findMany();
+    // Obtener alumnos
+    const todosAlumnos = await db.alumnoClasificado.findMany();
 
-    // Métricas generales
+    const alumnos = unidad
+      ? todosAlumnos.filter(a => normalizeText(a.unidad) === normalizeText(unidad))
+      : todosAlumnos;
+
+    // Obtener metas (usando as any para evitar bloqueos por lints de tipos desactualizados)
+    const todasMetas = await (db.metaReinscripcion as any).findMany({
+      where: { mes }
+    });
+
     const reinscritos = alumnos.filter(a => a.clasificacion === 'Reinscrito').length;
     const bajasTransferencia = alumnos.filter(a => a.clasificacion === 'Baja Transferencia').length;
     const bajasReales = alumnos.filter(a => a.clasificacion === 'Baja Real').length;
@@ -20,62 +30,52 @@ export async function GET(request: NextRequest) {
     const nuevos = alumnos.filter(a => a.clasificacion === 'Nuevo').length;
     const candidatos = alumnos.filter(a => a.clasificacion === 'Candidato').length;
 
-    // Total a reinscribir = alumnos del 25-26 (excluyendo nuevos ingresos y candidatos)
     const totalAReinscribir = reinscritos + bajasTransferencia + bajasReales + porReinscribir;
-    const totalClasificados = alumnos.length; // Incluye todos
+    const totalClasificados = alumnos.length;
 
-    // Buscar meta global
-    const metaGlobal = todasMetas.find(m => m.tipo === 'global');
+    // Buscar metas con prioridad: 
+    // 1. Meta específica del campus creada por el Admin del campus
+    // 2. Meta específica del campus creada por el Director General
+    // 3. Meta global creada por el Director General
+    const unidadNormalizada = normalizeText(unidad || "");
 
-    // Calcular porcentaje de cumplimiento
-    let porcentajeCumplimiento = 0;
-    let metaObjetivo = 0;
-    let tipoMetaGlobal = 'numero';
-    let valorMetaGlobal = 0;
+    console.log('Buscando metas para unidad:', unidadNormalizada, 'en mes:', mes);
 
-    if (metaGlobal) {
-      tipoMetaGlobal = metaGlobal.tipoMeta ?? 'numero';
-      valorMetaGlobal = metaGlobal.valorMeta ?? 0;
+    const metaCampusAdmin = todasMetas.find((m: any) =>
+      m.tipo === 'unidad' &&
+      normalizeText(m.unidadAsignada || "") === unidadNormalizada &&
+      m.creadaPorRol === 'ADMIN_CAMPUS'
+    );
+    const metaCampusDG = todasMetas.find((m: any) =>
+      m.tipo === 'unidad' &&
+      normalizeText(m.unidadAsignada || "") === unidadNormalizada &&
+      m.creadaPorRol === 'DIRECTOR_GENERAL'
+    );
+    const metaGlobal = todasMetas.find((m: any) =>
+      m.tipo === 'global' &&
+      m.creadaPorRol === 'DIRECTOR_GENERAL'
+    );
 
-      if (metaGlobal.tipoMeta === 'porcentaje') {
-        // Si la meta es porcentaje, mostrar cuánto hemos alcanzado del porcentaje objetivo
-        porcentajeCumplimiento = totalAReinscribir > 0
-          ? Math.round((reinscritos / totalAReinscribir) * 100)
-          : 0;
-        metaObjetivo = metaGlobal.meta; // Número absoluto calculado
-      } else {
-        // Si la meta es número absoluto
-        porcentajeCumplimiento = metaGlobal.meta > 0
-          ? Math.round((reinscritos / metaGlobal.meta) * 100)
-          : 0;
-        metaObjetivo = metaGlobal.meta;
-      }
-    }
+    console.log('Metas encontradas:', {
+      admin: !!metaCampusAdmin,
+      dg: !!metaCampusDG,
+      global: !!metaGlobal
+    });
 
-    // Métricas por grupo
+    // La meta "principal" para este dashboard será la del campus (Admin o DG) o la Global
+    const metaPrincipal = metaCampusAdmin || metaCampusDG || metaGlobal;
+
+    // Meta específica de DG para comparativas (siempre la de DG)
+    const metaDG = metaCampusDG || metaGlobal;
+
+    const porcentajeActual = totalAReinscribir > 0 ? Math.round((reinscritos / totalAReinscribir) * 100) : 0;
+
+    // Restaurar métricas por grupo
     const grupos = [...new Set(alumnos.map(a => a.grupo))];
     const metricasPorGrupo = grupos.map(grupo => {
       const alumnosGrupo = alumnos.filter(a => a.grupo === grupo);
       const reinscritosGrupo = alumnosGrupo.filter(a => a.clasificacion === 'Reinscrito').length;
-
-      // Buscar meta específica del grupo
-      const metaGrupo = todasMetas.find(m => m.tipo === 'grupo' && m.grupo === grupo);
-
-      let metaGrupoAbsoluta = metaGrupo?.meta || null;
-      let porcentajeGrupo = alumnosGrupo.length > 0
-        ? Math.round((reinscritosGrupo / alumnosGrupo.length) * 100)
-        : 0;
-      let porcentajeCumplimientoGrupo = 0;
-
-      if (metaGrupo) {
-        if (metaGrupo.tipoMeta === 'porcentaje') {
-          porcentajeCumplimientoGrupo = porcentajeGrupo; // El porcentaje actual vs el porcentaje objetivo
-        } else {
-          porcentajeCumplimientoGrupo = metaGrupo.meta > 0
-            ? Math.round((reinscritosGrupo / metaGrupo.meta) * 100)
-            : 0;
-        }
-      }
+      const metaGrupo = todasMetas.find((m: any) => m.tipo === 'grupo' && m.grupo === grupo);
 
       return {
         grupo,
@@ -86,65 +86,66 @@ export async function GET(request: NextRequest) {
         porReinscribir: alumnosGrupo.filter(a => a.clasificacion === 'Por Reinscribir').length,
         nuevos: alumnosGrupo.filter(a => a.clasificacion === 'Nuevo').length,
         candidatos: alumnosGrupo.filter(a => a.clasificacion === 'Candidato').length,
-        porcentaje: porcentajeGrupo,
-        meta: metaGrupoAbsoluta,
+        porcentaje: alumnosGrupo.length > 0 ? Math.round((reinscritosGrupo / alumnosGrupo.length) * 100) : 0,
+        meta: metaGrupo?.meta || 0,
         tipoMeta: metaGrupo?.tipoMeta || 'numero',
         valorMeta: metaGrupo?.valorMeta || 0,
-        porcentajeCumplimiento: porcentajeCumplimientoGrupo,
+        porcentajeCumplimiento: metaGrupo?.meta > 0 ? Math.round((reinscritosGrupo / metaGrupo.meta) * 100) : 0,
       };
     }).sort((a, b) => a.grupo.localeCompare(b.grupo));
 
-    // Timeline de reinscripciones por fecha
-    const reinscritosConFecha = alumnos.filter(a =>
-      a.clasificacion === 'Reinscrito' && a.fechaEstatus
-    );
-
+    // Restaurar Timeline (solo Reinscritos genuinos hasta hoy)
+    const hoyStr = new Date().toISOString().split('T')[0];
     const timelineMap = new Map<string, number>();
-    reinscritosConFecha.forEach(alumno => {
-      if (alumno.fechaEstatus) {
-        const fechaStr = alumno.fechaEstatus.toISOString().split('T')[0];
-        timelineMap.set(fechaStr, (timelineMap.get(fechaStr) || 0) + 1);
-      }
-    });
+
+    alumnos
+      .filter(a => a.clasificacion === 'Reinscrito' && a.fechaEstatus)
+      .forEach(a => {
+        const fecha = a.fechaEstatus!.toISOString().split('T')[0];
+        // Solo descartar fechas futuras accidentales
+        if (fecha <= hoyStr) {
+          timelineMap.set(fecha, (timelineMap.get(fecha) || 0) + 1);
+        }
+      });
 
     const timeline = Array.from(timelineMap.entries())
       .map(([fecha, cantidad]) => ({ fecha, cantidad }))
       .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
 
-    // Calcular acumulado
     let acumulado = 0;
     const timelineAcumulado = timeline.map(t => {
       acumulado += t.cantidad;
       return { ...t, acumulado };
     });
 
-    // Distribución por estatus original
-    const estatusOriginal = alumnos.reduce((acc, alumno) => {
-      acc[alumno.estatus] = (acc[alumno.estatus] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
     return NextResponse.json({
       resumen: {
-        total: totalAReinscribir, // Total de alumnos a reinscribir (del 25-26)
-        totalClasificados: totalClasificados, // Incluye todos
+        total: totalAReinscribir,
+        totalClasificados,
         reinscritos,
         bajasTransferencia,
         bajasReales,
         porReinscribir,
         nuevos,
         candidatos,
-        meta: metaObjetivo,
-        porcentajeCumplimiento,
-        tipoMeta: tipoMetaGlobal,
-        valorMeta: valorMetaGlobal,
-        porcentajeActual: totalAReinscribir > 0 ? Math.round((reinscritos / totalAReinscribir) * 100) : 0,
+        meta: metaPrincipal?.meta || 0,
+        tipoMeta: metaPrincipal?.tipoMeta || 'numero',
+        valorMeta: metaPrincipal?.valorMeta || 0,
+        porcentajeCumplimiento: metaPrincipal?.meta > 0 ? Math.round((reinscritos / metaPrincipal.meta) * 100) : 0,
+        porcentajeActual,
+        metaDirectorGeneral: metaDG?.valorMeta || 0,
+        porcentajeCumplimientoDirectorGeneral: metaDG?.valorMeta > 0 ? Math.round((porcentajeActual / metaDG.valorMeta) * 100) : 0
       },
       porGrupo: metricasPorGrupo,
       timeline: timelineAcumulado,
-      estatusOriginal,
+      estatusOriginal: alumnos.reduce((acc, a) => {
+        acc[a.estatus] = (acc[a.estatus] || 0) + 1;
+        return acc;
+      }, {} as any),
       metaGlobal: metaGlobal || null,
     });
+
+
   } catch (error) {
     console.error('Error al obtener métricas:', error);
     return NextResponse.json({ error: 'Error al obtener métricas' }, { status: 500 });

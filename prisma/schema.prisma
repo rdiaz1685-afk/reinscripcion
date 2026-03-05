@@ -6,26 +6,28 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 // Datos del ciclo escolar 25-26 (base de alumnos actual)
 model Alumno25_26 {
   id        String   @id @default(cuid())
-  matricula String   @unique
+  matricula String
   unidad    String
   grado     String
   nombre    String
   grupo     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([matricula, unidad], name: "matricula_unidad")
 }
 
 // Datos del ciclo escolar 26-27 (estado de reinscripción)
 model Alumno26_27 {
   id              String    @id @default(cuid())
-  matricula       String    @unique
+  matricula       String
   unidad          String
   grado           String
   nombre          String
@@ -34,26 +36,31 @@ model Alumno26_27 {
   comentario      String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  @@unique([matricula, unidad], name: "matricula_unidad")
 }
 
-// Metas de reinscripción
+// Metas de reinscripción e Incentivos
 model MetaReinscripcion {
-  id        String   @id @default(cuid())
-  tipo      String   // "global" o "grupo"
-  grupo     String?  // null para meta global, nombre del grupo para meta específica
-  meta      Int      // Número objetivo de reinscritos
-  tipoMeta  String?  @default("numero") // "numero" o "porcentaje"
-  valorMeta Float?   @default(0) // Valor de la meta
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  tipo            String   // "global", "unidad" o "grupo"
+  unidadAsignada  String   @default("") // Para qué unidad es la meta (si aplica)
+  grupo           String   @default("") // meta campus: "", meta específica: nombre del grupo
+  mes             Int      @default(3)  // Mes de la meta (1-12)
+  meta            Int      // Número objetivo de alumnos (calculado)
+  tipoMeta        String?  @default("numero") // "numero" o "porcentaje"
+  valorMeta       Float?   @default(0) // Valor original (ej: 85 para 85%)
+  creadaPorRol    String   // "DIRECTOR_GENERAL" o "ADMIN_CAMPUS"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  @@unique([tipo, grupo])
+  @@unique([tipo, unidadAsignada, grupo, mes, creadaPorRol], name: "meta_unique")
 }
 
 // Vista consolidada de alumnos con clasificación
 model AlumnoClasificado {
   id                  String   @id @default(cuid())
-  matricula           String   @unique
+  matricula           String
   nombre              String
   grupo               String   // Del reporte 25-26
   grado               String
@@ -61,8 +68,39 @@ model AlumnoClasificado {
   estatus             String   // Del reporte 26-27
   fechaEstatus        DateTime?
   comentario          String?
-  clasificacion       String   // Reinscrito, Baja Transferencia, Baja Real, Por Reinscribir, Nuevo
+  clasificacion       String   // Reinscrito, Baja Transferencia, Baja Real, Por Reinscribir, Nuevo, Candidato
   fechaClasificacion  DateTime @default(now())
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+
+  @@unique([matricula, unidad], name: "matricula_unidad")
+}
+
+// Histórico de métricas para el dashboard general
+model SnapshotMetricas {
+
+  id                String   @id @default(cuid())
+  fecha             DateTime @default(now())
+  unidad            String   // "Global" o nombre del Campus (Unidad)
+  reinscritos       Int
+  bajasTransferencia Int
+  bajasReales       Int
+  porReinscribir    Int
+  nuevos            Int
+  candidatos        Int
+  total             Int
+  meta              Int
+  porcentajeCumplimiento Float
+  createdAt         DateTime @default(now())
+}
+// Usuarios y Roles
+model Usuario {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  nombre    String
+  password  String   // En un sistema real usaríamos hash
+  rol       String   // "DIRECTOR_GENERAL" o "ADMIN_CAMPUS"
+  unidad    String?  // Nombre de la unidad (campus) asignada si es ADMIN_CAMPUS
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
