@@ -31,8 +31,11 @@ RUN mkdir -p /app/upload /app/tmp
 # Build de Next.js
 RUN bun run build
 
-# Exponer el puerto que Railway asigne automáticamente
+# Puerto que Railway asigna automáticamente
+EXPOSE 8080
+
 ENV NODE_ENV=production
+ENV PORT=8080
 ENV HOSTNAME="0.0.0.0"
 
 # Comando de inicio
