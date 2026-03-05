@@ -10,20 +10,21 @@ export const authOptions: NextAuthOptions = {
             clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
         }),
     ],
-    secret: process.env.NEXTAUTH_SECRET,
+    secret: process.env.NEXTAUTH_SECRET || "cambridge-mty-secret-fallback-2026",
+    trustHost: true,
     callbacks: {
         async signIn({ user }) {
-            console.log("Intentando signIn para:", user.email);
+            console.log("DEBUG: Intentando entrar con:", user.email);
             const authorized = getAuthorizedUser(user.email);
-            console.log("Resultado autorización:", authorized ? "AUTORIZADO" : "DENEGADO");
             if (authorized) {
+                console.log("DEBUG: Usuario autorizado con éxito");
                 return true;
             }
+            console.log("DEBUG: Usuario NO encontrado en la lista");
             return false;
         },
-        async jwt({ token, user, account }) {
+        async jwt({ token, user }) {
             if (user) {
-                console.log("Generando JWT para:", user.email);
                 const authorized = getAuthorizedUser(user.email);
                 if (authorized) {
                     token.rol = authorized.rol;
@@ -33,8 +34,7 @@ export const authOptions: NextAuthOptions = {
             return token;
         },
         async session({ session, token }) {
-            console.log("Generando sesión para:", session.user?.email);
-            if (session.user) {
+            if (session?.user) {
                 (session.user as any).rol = token.rol;
                 (session.user as any).unidad = token.unidad;
             }
@@ -45,7 +45,7 @@ export const authOptions: NextAuthOptions = {
         signIn: "/",
         error: "/",
     },
-    debug: true, // Activa el modo debug de NextAuth para ver más detalles en los logs de Railway
+    debug: process.env.NODE_ENV === 'development' ? false : true,
 };
 
 export default NextAuth(authOptions);
