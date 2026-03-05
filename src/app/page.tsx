@@ -1611,15 +1611,64 @@ function LoginDialog({ open }: { open: boolean }) {
                       d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                     />
                   </svg>
-                  <span>Continuar con Google</span>
+                  <span>Entrar con Google</span>
                 </div>
               )}
             </Button>
 
+            <div className="relative flex items-center gap-4 py-2">
+              <div className="flex-1 h-px bg-slate-100" />
+              <span className="text-[10px] font-bold text-slate-300 uppercase tracking-[0.2em]">O acceso directo</span>
+              <div className="flex-1 h-px bg-slate-100" />
+            </div>
+
+            <div className="space-y-4 w-full">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-600 ml-1">Correo Institucional</Label>
+                <Input
+                  id="direct-email"
+                  type="email"
+                  placeholder="nombre.apellido@cambridgemty.edu.mx"
+                  className="h-12 border-slate-100 focus:border-emerald-400 focus:ring-emerald-100 transition-all rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-slate-600 ml-1">Contraseña Maestra</Label>
+                <Input
+                  id="direct-password"
+                  type="password"
+                  placeholder="••••••••"
+                  className="h-12 border-slate-100 focus:border-emerald-400 focus:ring-emerald-100 transition-all rounded-xl"
+                />
+              </div>
+              <Button
+                className="w-full h-12 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl shadow-lg transition-all active:scale-[0.98]"
+                onClick={async () => {
+                  setLoading(true);
+                  const email = (document.getElementById('direct-email') as HTMLInputElement).value;
+                  const password = (document.getElementById('direct-password') as HTMLInputElement).value;
+
+                  const result = await signIn('credentials', {
+                    email,
+                    password,
+                    redirect: true,
+                    callbackUrl: '/'
+                  });
+
+                  if (result?.error) {
+                    alert("Error: Datos incorrectos");
+                    setLoading(false);
+                  }
+                }}
+              >
+                {loading ? <RefreshCw className="h-5 w-5 animate-spin" /> : "Ingresar Ahora"}
+              </Button>
+            </div>
+
             <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl flex items-start gap-3">
               <AlertCircle className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
               <p className="text-xs text-slate-500 leading-relaxed">
-                Acceso restringido para personal autorizado del <strong>Colegio Cambridge de Monterrey</strong>. Utiliza únicamente tu correo institucional para ingresar.
+                Portal administrativo del <strong>Colegio Cambridge</strong>. Acceso restringido.
               </p>
             </div>
           </div>
