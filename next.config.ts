@@ -5,7 +5,9 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
-  serverExternalPackages: ['xlsx'],
+  experimental: {
+    serverComponentsExternalPackages: ['xlsx'],
+  },
 };
 
 export default nextConfig;
