@@ -10,7 +10,7 @@ export const authOptions: NextAuthOptions = {
             clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
         }),
     ],
-    secret: process.env.NEXTAUTH_SECRET,
+    secret: process.env.NEXTAUTH_SECRET || "cambridge-mty-reinscripcion-secret-2026",
     callbacks: {
         async signIn({ user }) {
             console.log("=== NEXTAUTH DEBUG: SIGNIN ===");
@@ -45,7 +45,7 @@ export const authOptions: NextAuthOptions = {
         signIn: "/",
         error: "/",
     },
-    debug: true,
+    debug: process.env.NODE_ENV !== 'production',
 };
 
 export default NextAuth(authOptions);
