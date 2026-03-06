@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
       for (const f of files) {
         try {
           // Determinar tipo (25-26 o 26-27) basado en el nombre del archivo
-          const t = f.includes('25_26') ? '25-26' : '26-27';
+          const t = f.includes('25-26') ? '25-26' : '26-27';
           const res = await realizarImportacion(f, t);
           totalImported += res.count;
           console.log(`✅ Archivo batch procesado: ${f} (${res.count} registros)`);
