@@ -1226,7 +1226,7 @@ export default function Dashboard() {
                 </Alert>
 
                 {/* Subir archivos */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-8 flex flex-col w-full">
                   {/* Sección de Carga: SOLO DIRECTOR GENERAL o SUPERADMIN */}
                   {usuario?.rol === 'DIRECTOR_GENERAL' ? (
                     <>

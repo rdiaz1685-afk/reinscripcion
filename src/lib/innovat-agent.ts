@@ -471,7 +471,7 @@ export async function syncFromInnovat(
             acceptDownloads: true,
             viewport: { width: 1280, height: 900 },
         });
-        const page = await context.newPage();
+        let page = await context.newPage();
 
         // ── 1. LOGIN ──────────────────────────────────────────────────────────
         onStep?.({ type: 'login' });
@@ -527,7 +527,19 @@ export async function syncFromInnovat(
         onStep?.({ type: 'debug', message: `✅ Login exitoso` });
 
         // ── 2. POR CADA CAMPUS Y CICLO ────────────────────────────────────────
+        let primerCampus = true;
         for (const campus of campusList) {
+            // Liberar RAM: Cerrar pestaña anterior y abrir una nueva
+            // La cookie de sesión se mantiene en el "context" del navegador
+            if (!primerCampus) {
+                onStep?.({ type: 'debug', message: '♻️ Reiniciando pestaña para liberar memoria...' });
+                await page.close();
+                page = await context.newPage();
+                await page.goto('https://innovat1.mx/Gaia/32.2.2/#/Inicio', { waitUntil: 'domcontentloaded' });
+                await page.waitForTimeout(2000);
+            }
+            primerCampus = false;
+
             for (const ciclo of CICLOS) {
                 onStep?.({ type: 'campus', campus, ciclo });
 
