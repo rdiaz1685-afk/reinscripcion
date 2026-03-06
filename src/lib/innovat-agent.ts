@@ -405,9 +405,11 @@ async function descargarConInterceptor(
 
     if (exito) return true;
 
-    // ── Intento 2: Escanear unit IDs 1-15 para encontrar el de este campus ────
     const apiUrl = gralalumnosReqUrl ?? 'https://innovat1.mx/Gaia/32.2.2/api/gralalumnos';
-    const templateBody = gralalumnosReqBody ? JSON.parse(gralalumnosReqBody) : {
+
+    // Columnas exactas que tiene MITRAS:
+    // A1: Matrícula, A5: Nombre corto, A16: Unidad, A8: Grado, A9: Grupo, A10: Estatus, A11: Fecha estatus
+    const templateBody = {
         Filtro: 'Unidad', Ids: [], Estatus: 1, OptHermanos: 'TODOS',
         Campos: [
             { Alias: 'Matrícula', Codigo: 'A1', Seccion: 1, Columna: 1, Selected: true },
@@ -489,7 +491,14 @@ export async function syncFromInnovat(
     try {
         browser = await chromium.launch({
             headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--js-flags="--max-old-space-size=512"', // Limitar memoria JS para evitar crashes
+                '--disable-gpu',
+                '--disable-animations'
+            ],
         });
 
         const context = await browser.newContext({
@@ -656,13 +665,12 @@ export async function syncFromInnovat(
                         const tabAdmin = page.locator('a, span').filter({ hasText: /^Administrativos$/i }).first();
                         if (await tabAdmin.isVisible({ timeout: 2000 })) {
                             await tabAdmin.click();
-                            await page.waitForTimeout(500);
+                            await page.waitForTimeout(600);
 
                             // El checkbox de Grupo suele estar en un div.icheckbox_flat-green
-                            // cerca de un label que dice "Grupo"
-                            const insGrupo = page.locator('div:has(label:text-is("Grupo")) ins, label:has-text("Grupo") + div ins').first();
+                            const insGrupo = page.locator('div:has(label:text-is("Grupo")) ins, label:has-text("Grupo") + div ins, .icheckbox_flat-green:has(+ label:text-is("Grupo")) ins').first();
 
-                            if (await insGrupo.isVisible({ timeout: 1500 })) {
+                            if (await insGrupo.isVisible({ timeout: 3000 })) {
                                 const isChecked = await insGrupo.evaluate(node =>
                                     node.parentElement?.classList.contains('checked') ||
                                     node.parentElement?.getAttribute('aria-checked') === 'true'
@@ -670,14 +678,17 @@ export async function syncFromInnovat(
 
                                 if (!isChecked) {
                                     onStep?.({ type: 'debug', message: '🔘 Activando columna "Grupo" en la UI...' });
-                                    await insGrupo.click();
-                                    await page.waitForTimeout(400);
+                                    await insGrupo.dispatchEvent('click'); // dispatchEvent es más robusto para iCheck
+                                    await page.waitForTimeout(600);
                                 }
                             }
 
-                            // Volver a la primera pestaña (Alumno) para que el reporte se genere normal
-                            await page.locator('a, span').filter({ hasText: /^Alumno$/i }).first().click();
-                            await page.waitForTimeout(300);
+                            // Volver a la primera pestaña (Alumno)
+                            const tabAlumno = page.locator('a, span').filter({ hasText: /^Alumno$/i }).first();
+                            if (await tabAlumno.isVisible()) {
+                                await tabAlumno.click();
+                                await page.waitForTimeout(400);
+                            }
                         }
                     } catch (e) {
                         onStep?.({ type: 'debug', message: `⚠️ No se pudo asegurar columna Grupo en UI: ${e}` });
