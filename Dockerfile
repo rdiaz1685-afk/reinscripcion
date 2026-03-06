@@ -18,6 +18,10 @@ COPY prisma ./prisma/
 # Instalar dependencias
 RUN bun install
 
+# Instalar navegadores de Playwright y dependencias del sistema operativo
+RUN bunx playwright install chromium
+RUN bunx playwright install-deps chromium
+
 # Copiar el resto
 COPY . .
 
