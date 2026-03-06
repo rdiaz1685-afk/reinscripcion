@@ -406,9 +406,19 @@ async function descargarConInterceptor(
 
     // Columnas exactas que tiene MITRAS:
     // A1: Matrícula, A5: Nombre corto, A16: Unidad, A8: Grado, A9: Grupo, A10: Estatus, A11: Fecha estatus
+    // En Plan B usaremos SIEMPRE las columnas de Mitras para garantizar estandarización
     const templateBody = {
         Filtro: 'Unidad', Ids: [], Estatus: 1, OptHermanos: 'TODOS',
-        Campos: [], Tipo: 'xlsx', Hermanos: 'TODOS',
+        Campos: [
+            { Alias: 'Matrícula', Codigo: 'A1', Seccion: 1, Columna: 1, Selected: true },
+            { Alias: 'Nombre corto', Codigo: 'A5', Seccion: 1, Columna: 2, Selected: true },
+            { Alias: 'Unidad', Codigo: 'A16', Seccion: 1, Columna: 3, Selected: true },
+            { Alias: 'Grado', Codigo: 'A8', Seccion: 1, Columna: 4, Selected: true },
+            { Alias: 'Grupo', Codigo: 'A9', Seccion: 1, Columna: 5, Selected: true },
+            { Alias: 'Estatus', Codigo: 'A10', Seccion: 1, Columna: 6, Selected: true },
+            { Alias: 'Fecha estatus', Codigo: 'A11', Seccion: 1, Columna: 7, Selected: true },
+            { Alias: 'Comentario estatus', Codigo: 'A12', Seccion: 1, Columna: 8, Selected: true }
+        ], Tipo: 'xlsx', Hermanos: 'TODOS',
     };
     const campusNorm = campus.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
     const estatus = ciclo === '2026-2027' ? -1 : 1;
@@ -418,14 +428,19 @@ async function descargarConInterceptor(
         for (const testId of ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30']) {
             const scanBody = JSON.stringify({ ...templateBody, Filtro: 'Unidad', Ids: [testId], Estatus: estatus });
             const result = await page.evaluate(
-                async ({ url, body }: { url: string; body: string }) => {
+                async ({ url, body, reqHeaders }: { url: string; body: string; reqHeaders: any }) => {
                     // Plan B: Intentar PUT y luego POST (algunos servers así lo piden)
                     for (const method of ['PUT', 'POST']) {
                         try {
+                            const mergedHeaders = {
+                                ...reqHeaders,
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json, text/plain, */*'
+                            };
                             const res = await fetch(url, {
                                 method,
                                 credentials: 'include',
-                                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/plain, */*' },
+                                headers: mergedHeaders,
                                 body,
                             });
                             if (res.status === 200) {
@@ -438,7 +453,7 @@ async function descargarConInterceptor(
                                 const res2 = await fetch(url, {
                                     method,
                                     credentials: 'include',
-                                    headers: { 'Content-Type': 'application/json' },
+                                    headers: mergedHeaders,
                                     body: retryBody,
                                 });
                                 if (res2.status === 200) {
@@ -450,7 +465,7 @@ async function descargarConInterceptor(
                     }
                     return { status: 500, text: '' };
                 },
-                { url: apiUrl, body: scanBody }
+                { url: apiUrl, body: scanBody, reqHeaders: gralalumnosReqHeaders }
             );
 
             if (result.status !== 200 || result.text.length < 5) {
@@ -614,9 +629,9 @@ export async function syncFromInnovat(
                     // Para DOMINIO/MITRAS el scope AngularJS ya tiene los IDs cargados automáticamente
                     // Para NORTE/CUMBRES/ANAHUAC hay que seleccionarlo manualmente via el autocomplete
                     try {
-                        // Intentar con getByPlaceholder (más fiable que CSS selector para AngularJS)
-                        const autocompleteInput = page.getByPlaceholder(/Seleccione/i).first();
-                        const isVisible = await autocompleteInput.isVisible({ timeout: 3000 }).catch(() => false);
+                        // Buscar el input del autocomplete estrictamente dentro de un contenedor de "Unidad" o "Escuela"
+                        const autocompleteInput = page.locator('md-autocomplete').filter({ hasText: /Unidad|Plantel|Escuela/i }).locator('input').first();
+                        const isVisible = await autocompleteInput.isVisible({ timeout: 2000 }).catch(() => false);
 
                         if (isVisible) {
                             const valorActual = await autocompleteInput.inputValue({ timeout: 1000 }).catch(() => '');
