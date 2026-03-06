@@ -174,11 +174,15 @@ async function cambiarCampusCiclo(
         const tieneCampus = texto.includes(campusNorm);
         const tieneCiclo = texto.includes(ciclo.toUpperCase()) || texto.includes(cicloC.toUpperCase());
         if (tieneCampus && tieneCiclo) {
-            await opciones.nth(i).click();
-            await page.waitForTimeout(1800);
+            try {
+                await opciones.nth(i).click({ noWaitAfter: true, force: true, timeout: 5000 });
+            } catch (e) {
+                onStep?.({ type: 'debug', message: `⚠️ Click suave en combo campus/ciclo: ${e}` });
+            }
+            await page.waitForTimeout(2500);
             onStep?.({ type: 'debug', message: `✅ Seleccionado: "${raw.trim()}" (idx ${i})` });
             seleccionado = true;
-            seleccionadoConCiclo = true; // Ya tiene campus Y ciclo — NO buscar segundo nivel
+            seleccionadoConCiclo = true;
             break;
         }
     }
@@ -189,9 +193,12 @@ async function cambiarCampusCiclo(
             const raw = (await opciones.nth(i).textContent().catch(() => '')) ?? '';
             const texto = norm(raw);
             if (texto.length > MAX_LONGITUD_OPCION && texto.includes(norm(campus))) {
-                // Texto corto con solo el campus
-                await opciones.nth(i).click();
-                await page.waitForTimeout(1000);
+                try {
+                    await opciones.nth(i).click({ noWaitAfter: true, force: true, timeout: 5000 });
+                } catch (e) {
+                    onStep?.({ type: 'debug', message: `⚠️ Click suave en fallback campus: ${e}` });
+                }
+                await page.waitForTimeout(2000);
                 onStep?.({ type: 'debug', message: `✅ Campus (fallback): "${raw.trim()}"` });
                 seleccionado = true;
                 break;
@@ -217,8 +224,12 @@ async function cambiarCampusCiclo(
                 const raw = await opcionesCiclo.nth(i).textContent().catch(() => '');
                 const texto = norm(raw ?? '');
                 if (texto.length < MAX_LONGITUD_OPCION && (texto.includes(ciclo) || texto.includes(cicloC))) {
-                    await opcionesCiclo.nth(i).click();
-                    await page.waitForTimeout(1800);
+                    try {
+                        await opcionesCiclo.nth(i).click({ noWaitAfter: true, force: true, timeout: 5000 });
+                    } catch (e) {
+                        onStep?.({ type: 'debug', message: `⚠️ Click suave en ciclo 2º nivel: ${e}` });
+                    }
+                    await page.waitForTimeout(2500);
                     onStep?.({ type: 'debug', message: `✅ Ciclo ${cicloC} seleccionado en 2º nivel` });
                     break;
                 }
