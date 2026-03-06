@@ -358,15 +358,6 @@ async function descargarConInterceptor(
                     const json = JSON.parse(bodyText);
 
                     if (Array.isArray(json) && json.length > 0) {
-                        // REGLA CRÍTICA: Algunos campus no tienen "Grupo" por defecto en la UI.
-                        // Si falta el campo "Grupo" o el código "A9", ignoramos esta captura
-                        // para que el sistema use el Intento 2 (fetch directo) con todos los campos.
-                        const tieneGrupo = json.some(row => row.hasOwnProperty('Grupo') || row.hasOwnProperty('A9'));
-                        if (!tieneGrupo) {
-                            onStep?.({ type: 'debug', message: '⚠️ JSON sin columna "Grupo". Forzando reintento por API con campos completos...' });
-                            return; // Sigue escuchando o irá al fallback por timeout
-                        }
-
                         onStep?.({ type: 'debug', message: `📊 ${json.length} alumnos → Excel...` });
                         const XLSX = await import('xlsx');
                         const wb = XLSX.utils.book_new();
@@ -417,16 +408,7 @@ async function descargarConInterceptor(
     // A1: Matrícula, A5: Nombre corto, A16: Unidad, A8: Grado, A9: Grupo, A10: Estatus, A11: Fecha estatus
     const templateBody = {
         Filtro: 'Unidad', Ids: [], Estatus: 1, OptHermanos: 'TODOS',
-        Campos: [
-            { Alias: 'Matrícula', Codigo: 'A1', Seccion: 1, Columna: 1, Selected: true },
-            { Alias: 'Nombre corto', Codigo: 'A5', Seccion: 1, Columna: 2, Selected: true },
-            { Alias: 'Unidad', Codigo: 'A16', Seccion: 1, Columna: 3, Selected: true },
-            { Alias: 'Grado', Codigo: 'A8', Seccion: 1, Columna: 4, Selected: true },
-            { Alias: 'Grupo', Codigo: 'A9', Seccion: 1, Columna: 5, Selected: true },
-            { Alias: 'Estatus', Codigo: 'A10', Seccion: 1, Columna: 6, Selected: true },
-            { Alias: 'Fecha estatus', Codigo: 'A11', Seccion: 1, Columna: 7, Selected: true },
-            { Alias: 'Comentario estatus', Codigo: 'A12', Seccion: 1, Columna: 8, Selected: true }
-        ], Tipo: 'xlsx', Hermanos: 'TODOS',
+        Campos: [], Tipo: 'xlsx', Hermanos: 'TODOS',
     };
     const campusNorm = campus.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
     const estatus = ciclo === '2026-2027' ? -1 : 1;
