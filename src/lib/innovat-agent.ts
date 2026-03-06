@@ -130,14 +130,18 @@ async function cambiarCampusCiclo(
     // ── Hacer click en el trigger del dropdown
     let clicExitoso = false;
     try {
-        await dropdownTrigger.click({ timeout: 3000 });
+        await dropdownTrigger.click({ timeout: 4000 });
         clicExitoso = true;
     } catch {
         try {
-            await dropdownFallback.click({ timeout: 3000 });
+            await dropdownFallback.click({ timeout: 4000 });
             clicExitoso = true;
         } catch {
-            onStep?.({ type: 'debug', message: '⚠️ No se encontró el trigger del dropdown de campus' });
+            onStep?.({ type: 'debug', message: '⚠️ No se encontró el trigger del dropdown (reintentando...)' });
+            // Forzar navegación a un estado limpio
+            await page.goto('https://innovat1.mx/Gaia/32.2.2/#/Inicio', { waitUntil: 'domcontentloaded' }).catch(() => { });
+            await page.waitForTimeout(2000);
+            await dropdownFallback.click({ timeout: 4000 }).then(() => clicExitoso = true).catch(() => { });
         }
     }
 
@@ -348,7 +352,10 @@ async function descargarConInterceptor(
                         return;
                     }
                     const bodyText = await response.text().catch(() => '');
-                    onStep?.({ type: 'debug', message: `📄 Body gralalumnos: ${bodyText.length} chars` });
+                    if (!bodyText || bodyText.length < 5) {
+                        onStep?.({ type: 'debug', message: `📄 Body vacío o insuficiente (status ${status}).` });
+                        return;
+                    }
                     const json = JSON.parse(bodyText);
 
                     if (Array.isArray(json) && json.length > 0) {
@@ -427,18 +434,40 @@ async function descargarConInterceptor(
     onStep?.({ type: 'debug', message: `🔍 Escaneando IDs 1-15 para ${campus} ("${campusNorm}")...` });
 
     try {
-        for (const testId of ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15']) {
+        for (const testId of ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30']) {
             const scanBody = JSON.stringify({ ...templateBody, Filtro: 'Unidad', Ids: [testId], Estatus: estatus });
             const result = await page.evaluate(
                 async ({ url, body }: { url: string; body: string }) => {
-                    const res = await fetch(url, {
-                        method: 'PUT',
-                        credentials: 'include',
-                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/plain, */*' },
-                        body,
-                    });
-                    const text = await res.text();
-                    return { status: res.status, text };
+                    // Plan B: Intentar PUT y luego POST (algunos servers así lo piden)
+                    for (const method of ['PUT', 'POST']) {
+                        try {
+                            const res = await fetch(url, {
+                                method,
+                                credentials: 'include',
+                                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/plain, */*' },
+                                body,
+                            });
+                            if (res.status === 200) {
+                                const text = await res.text();
+                                if (text.length > 50) return { status: 200, text };
+                            }
+                            // Reintento: si falló con Estatus -1, probar con Estatus 1
+                            if (body.includes('"Estatus":-1')) {
+                                const retryBody = body.replace('"Estatus":-1', '"Estatus":1');
+                                const res2 = await fetch(url, {
+                                    method,
+                                    credentials: 'include',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: retryBody,
+                                });
+                                if (res2.status === 200) {
+                                    const t2 = await res2.text();
+                                    if (t2.length > 50) return { status: 200, text: t2 };
+                                }
+                            }
+                        } catch { }
+                    }
+                    return { status: 500, text: '' };
                 },
                 { url: apiUrl, body: scanBody }
             );
