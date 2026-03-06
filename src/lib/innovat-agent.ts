@@ -366,16 +366,16 @@ async function descargarConInterceptor(
             page.off('response', responseHandler);
             page.off('request', requestHandler);
             if (!capturado) {
-                onStep?.({ type: 'debug', message: `⏱️ Timeout del interceptor — intentando fetch directo...` });
+                onStep?.({ type: 'debug', message: `⏱️ Timeout del interceptor (30s) — intentando fetch directo...` });
                 resolve(false);
             }
-        }, 15_000); // Solo 15s para el interceptor; después usamos fetch directo
+        }, 30_000); // 30s de gracia para campus grandes
 
         try {
             await botonGenerar.click();
             onStep?.({ type: 'debug', message: '🖱️ Click en GENERAR...' });
         } catch (e) {
-            clearTimeout(timeoutId);
+            if (timeoutId) clearTimeout(timeoutId);
             page.off('response', responseHandler);
             page.off('request', requestHandler);
             resolve(false);
@@ -385,14 +385,18 @@ async function descargarConInterceptor(
     if (exito) return true;
 
     // ── Intento 2: Escanear unit IDs 1-15 para encontrar el de este campus ────
-    // DOMINIO=2 y MITRAS=3 son IDs secuenciales pequeños.
-    // Para NORTE/CUMBRES/ANAHUAC escaneamos hasta encontrar NombreComercial correcto.
     const apiUrl = gralalumnosReqUrl ?? 'https://innovat1.mx/Gaia/32.2.2/api/gralalumnos';
     const templateBody = gralalumnosReqBody ? JSON.parse(gralalumnosReqBody) : {
         Filtro: 'Unidad', Ids: [], Estatus: 1, OptHermanos: 'TODOS',
         Campos: [
             { Alias: 'Matrícula', Codigo: 'A1', Seccion: 1, Columna: 1, Selected: true },
             { Alias: 'Nombre corto', Codigo: 'A5', Seccion: 1, Columna: 2, Selected: true },
+            { Alias: 'Unidad', Codigo: 'A16', Seccion: 1, Columna: 3, Selected: true },
+            { Alias: 'Grado', Codigo: 'A8', Seccion: 1, Columna: 4, Selected: true },
+            { Alias: 'Grupo', Codigo: 'A9', Seccion: 1, Columna: 5, Selected: true },
+            { Alias: 'Estatus', Codigo: 'A10', Seccion: 1, Columna: 6, Selected: true },
+            { Alias: 'Fecha estatus', Codigo: 'A11', Seccion: 1, Columna: 7, Selected: true },
+            { Alias: 'Comentario estatus', Codigo: 'A12', Seccion: 1, Columna: 8, Selected: true }
         ], Tipo: 'xlsx', Hermanos: 'TODOS',
     };
     const campusNorm = campus.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
