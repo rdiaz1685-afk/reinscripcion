@@ -350,7 +350,17 @@ async function descargarConInterceptor(
                     const bodyText = await response.text().catch(() => '');
                     onStep?.({ type: 'debug', message: `📄 Body gralalumnos: ${bodyText.length} chars` });
                     const json = JSON.parse(bodyText);
+
                     if (Array.isArray(json) && json.length > 0) {
+                        // REGLA CRÍTICA: Algunos campus no tienen "Grupo" por defecto en la UI.
+                        // Si falta el campo "Grupo" o el código "A9", ignoramos esta captura
+                        // para que el sistema use el Intento 2 (fetch directo) con todos los campos.
+                        const tieneGrupo = json.some(row => row.hasOwnProperty('Grupo') || row.hasOwnProperty('A9'));
+                        if (!tieneGrupo) {
+                            onStep?.({ type: 'debug', message: '⚠️ JSON sin columna "Grupo". Forzando reintento por API con campos completos...' });
+                            return; // Sigue escuchando o irá al fallback por timeout
+                        }
+
                         onStep?.({ type: 'debug', message: `📊 ${json.length} alumnos → Excel...` });
                         const XLSX = await import('xlsx');
                         const wb = XLSX.utils.book_new();
@@ -638,6 +648,39 @@ export async function syncFromInnovat(
                         }
                     } catch (e) {
                         onStep?.({ type: 'debug', message: `⚠️ Error al llenar autocomplete: ${e}` });
+                    }
+
+                    // ── 2e. ASEGURAR COLUMNA "GRUPO" EN LA UI ───────────────────────
+                    // Para campus como CUMBRES/NORTE que no la traen activa por defecto
+                    try {
+                        const tabAdmin = page.locator('a, span').filter({ hasText: /^Administrativos$/i }).first();
+                        if (await tabAdmin.isVisible({ timeout: 2000 })) {
+                            await tabAdmin.click();
+                            await page.waitForTimeout(500);
+
+                            // El checkbox de Grupo suele estar en un div.icheckbox_flat-green
+                            // cerca de un label que dice "Grupo"
+                            const insGrupo = page.locator('div:has(label:text-is("Grupo")) ins, label:has-text("Grupo") + div ins').first();
+
+                            if (await insGrupo.isVisible({ timeout: 1500 })) {
+                                const isChecked = await insGrupo.evaluate(node =>
+                                    node.parentElement?.classList.contains('checked') ||
+                                    node.parentElement?.getAttribute('aria-checked') === 'true'
+                                );
+
+                                if (!isChecked) {
+                                    onStep?.({ type: 'debug', message: '🔘 Activando columna "Grupo" en la UI...' });
+                                    await insGrupo.click();
+                                    await page.waitForTimeout(400);
+                                }
+                            }
+
+                            // Volver a la primera pestaña (Alumno) para que el reporte se genere normal
+                            await page.locator('a, span').filter({ hasText: /^Alumno$/i }).first().click();
+                            await page.waitForTimeout(300);
+                        }
+                    } catch (e) {
+                        onStep?.({ type: 'debug', message: `⚠️ No se pudo asegurar columna Grupo en UI: ${e}` });
                     }
 
                     // ── 2e. Descargar con interceptor de red
