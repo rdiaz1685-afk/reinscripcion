@@ -1227,228 +1227,195 @@ export default function Dashboard() {
 
                 {/* Subir archivos */}
                 <div className="space-y-8 flex flex-col w-full">
-                  {/* Sección de Carga: SOLO DIRECTOR GENERAL o SUPERADMIN */}
-                  {usuario?.rol === 'DIRECTOR_GENERAL' ? (
-                    <>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6">
-                        <Card className="border-2 hover:border-emerald-200 transition-colors">
-                          <CardContent className="pt-6">
-                            <div className="text-center space-y-4">
-                              <div className="mx-auto w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
-                                <FileSpreadsheet className="h-6 w-6 text-emerald-600" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6">
+                    <Card className="border-2 hover:border-emerald-200 transition-colors">
+                      <CardContent className="pt-6">
+                        <div className="text-center space-y-4">
+                          <div className="mx-auto w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
+                            <FileSpreadsheet className="h-6 w-6 text-emerald-600" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-emerald-700">Subir 25-26</h3>
+                            <p className="text-sm text-slate-500">Base de alumnos actual</p>
+                          </div>
+                          <div className="space-y-2">
+                            <Input
+                              type="file"
+                              accept=".xlsx,.xls"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  setSelectedFile2526(file);
+                                }
+                              }}
+                              className="hidden"
+                              id="file-25-26-upload"
+                            />
+                            <label
+                              htmlFor="file-25-26-upload"
+                              className="cursor-pointer"
+                            >
+                              <div className={`flex items-center justify-center gap-2 px-4 py-3 border-2 rounded-lg transition-all ${selectedFile2526 ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 hover:border-slate-300'}`}>
+                                <FileUp className="h-4 w-4" />
+                                <span className="text-sm font-medium">
+                                  {selectedFile2526 ? selectedFile2526.name : 'Seleccionar archivo Excel'}
+                                </span>
                               </div>
-                              <div>
-                                <h3 className="font-semibold text-emerald-700">Subir 25-26</h3>
-                                <p className="text-sm text-slate-500">Base de alumnos actual</p>
-                              </div>
-                              <div className="space-y-2">
-                                <Input
-                                  type="file"
-                                  accept=".xlsx,.xls"
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
-                                      setSelectedFile2526(file);
-                                    }
-                                  }}
-                                  className="hidden"
-                                  id="file-25-26-upload"
-                                />
-                                <label
-                                  htmlFor="file-25-26-upload"
-                                  className="cursor-pointer"
-                                >
-                                  <div className={`flex items-center justify-center gap-2 px-4 py-3 border-2 rounded-lg transition-all ${selectedFile2526 ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 hover:border-slate-300'}`}>
-                                    <FileUp className="h-4 w-4" />
-                                    <span className="text-sm font-medium">
-                                      {selectedFile2526 ? selectedFile2526.name : 'Seleccionar archivo Excel'}
-                                    </span>
-                                  </div>
-                                </label>
-                                <Button
-                                  onClick={handleUpload2526}
-                                  disabled={uploading || !selectedFile2526}
-                                  className="w-full bg-emerald-500 hover:bg-emerald-600"
-                                >
-                                  {uploading ? (
-                                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                                  ) : (
-                                    <Upload className="h-4 w-4 mr-2" />
-                                  )}
-                                  Subir Archivo
-                                </Button>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-
-                        <Card className="border-2 hover:border-blue-200 transition-colors">
-                          <CardContent className="pt-6">
-                            <div className="text-center space-y-4">
-                              <div className="mx-auto w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                                <FileSpreadsheet className="h-6 w-6 text-blue-600" />
-                              </div>
-                              <div>
-                                <h3 className="font-semibold text-blue-700">Subir 26-27</h3>
-                                <p className="text-sm text-slate-500">Estado de reinscripción</p>
-                              </div>
-                              <div className="space-y-2">
-                                <Input
-                                  type="file"
-                                  accept=".xlsx,.xls"
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) {
-                                      setSelectedFile2627(file);
-                                    }
-                                  }}
-                                  className="hidden"
-                                  id="file-26-27-upload"
-                                />
-                                <label
-                                  htmlFor="file-26-27-upload"
-                                  className="cursor-pointer"
-                                >
-                                  <div className={`flex items-center justify-center gap-2 px-4 py-3 border-2 rounded-lg transition-all ${selectedFile2627 ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 hover:border-slate-300'}`}>
-                                    <FileUp className="h-4 w-4" />
-                                    <span className="text-sm font-medium">
-                                      {selectedFile2627 ? selectedFile2627.name : 'Seleccionar archivo Excel'}
-                                    </span>
-                                  </div>
-                                </label>
-                                <Button
-                                  onClick={handleUpload2627}
-                                  disabled={uploading || !selectedFile2627}
-                                  className="w-full bg-blue-500 hover:bg-blue-600"
-                                >
-                                  {uploading ? (
-                                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                                  ) : (
-                                    <Upload className="h-4 w-4 mr-2" />
-                                  )}
-                                  Subir Archivo
-                                </Button>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      </div>
-
-                      {/* Estado actual */}
-                      {importStatus && (
-                        <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4">
-                          <h4 className="font-semibold mb-3 flex items-center gap-2">
-                            <CheckCircle className="h-5 w-5 text-emerald-500" />
-                            Estado de Datos en Sistema
-                          </h4>
-                          <div className="grid grid-cols-3 gap-4 text-center">
-                            <div>
-                              <p className="text-2xl font-bold text-emerald-600">{importStatus.alumnos_25_26}</p>
-                              <p className="text-sm text-slate-500">Alumnos 25-26</p>
-                            </div>
-                            <div>
-                              <p className="text-2xl font-bold text-blue-600">{importStatus.alumnos_26_27}</p>
-                              <p className="text-sm text-slate-500">Alumnos 26-27</p>
-                            </div>
-                            <div>
-                              <p className="text-2xl font-bold text-purple-600">{importStatus.clasificados}</p>
-                              <p className="text-sm text-slate-500">Clasificados</p>
-                            </div>
+                            </label>
+                            <Button
+                              onClick={handleUpload2526}
+                              disabled={uploading || !selectedFile2526}
+                              className="w-full bg-emerald-500 hover:bg-emerald-600"
+                            >
+                              {uploading ? (
+                                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <Upload className="h-4 w-4 mr-2" />
+                              )}
+                              Subir Archivo
+                            </Button>
                           </div>
                         </div>
-                      )}
+                      </CardContent>
+                    </Card>
 
-                      {/* Acciones de procesamiento: SOLO DG */}
-                      <div className="flex flex-col sm:flex-row justify-center gap-4 pt-6">
-                        <Button
-                          onClick={() => importarDatos('25-26')}
-                          disabled={loading}
-                          variant="outline"
-                        >
-                          {loading ? (
-                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                          ) : (
-                            <Upload className="h-4 w-4 mr-2" />
-                          )}
-                          Importar 25-26
-                        </Button>
-                        <Button
-                          onClick={() => importarDatos('26-27')}
-                          disabled={loading}
-                          variant="outline"
-                        >
-                          {loading ? (
-                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                          ) : (
-                            <Upload className="h-4 w-4 mr-2" />
-                          )}
-                          Importar 26-27
-                        </Button>
-                        <Button
-                          onClick={procesarDatos}
-                          disabled={loading || !importStatus || (importStatus.alumnos_25_26 === 0 && importStatus.alumnos_26_27 === 0)}
-                          className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
-                        >
-                          {loading ? (
-                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                          ) : (
-                            <ArrowRightLeft className="h-4 w-4 mr-2" />
-                          )}
-                          Procesar y Clasificar
-                        </Button>
-
-                        {/* Botón Peligroso: Reset */}
-                        <Button
-                          variant="ghost"
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                          onClick={async () => {
-                            if (confirm('⚠️ ¿Estás SEGURO de querer borrar TODOS los datos? Esta acción no se puede deshacer.')) {
-                              setLoading(true);
-                              await fetch('/api/import', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ action: 'reset' })
-                              });
-                              cargarImportStatus();
-                              cargarMetricas();
-                              setLoading(false);
-                              alert('🗑️ Base de datos reiniciada');
-                            }
-                          }}
-                        >
-                          Reiniciar Sistema
-                        </Button>
-                      </div>
-                    </>
-                  ) : (
-                    // Vista restringida para Admins de Campus
-                    <div className="py-12 text-center space-y-4">
-                      <div className="mx-auto w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
-                        <AlertCircle className="h-8 w-8 text-slate-400" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-bold text-slate-900">Acceso Restringido</h3>
-                        <p className="text-slate-500 max-w-sm mx-auto">
-                          La carga masiva y el procesamiento global de datos son exclusivos de la Dirección General.
-                        </p>
-                      </div>
-                      {importStatus && (
-                        <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-6 max-w-lg mx-auto border border-dashed border-slate-300">
-                          <p className="text-sm font-semibold text-slate-600 mb-4 uppercase tracking-wider">Estado de tu Campus</p>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-white p-3 rounded shadow-sm">
-                              <p className="text-xl font-bold text-emerald-600">{importStatus.alumnos_25_26}</p>
-                              <p className="text-xs text-slate-500">Alumnos Registrados</p>
-                            </div>
-                            <div className="bg-white p-3 rounded shadow-sm">
-                              <p className="text-xl font-bold text-purple-600">{importStatus.clasificados}</p>
-                              <p className="text-xs text-slate-500">Clasificados</p>
-                            </div>
+                    <Card className="border-2 hover:border-blue-200 transition-colors">
+                      <CardContent className="pt-6">
+                        <div className="text-center space-y-4">
+                          <div className="mx-auto w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                            <FileSpreadsheet className="h-6 w-6 text-blue-600" />
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-blue-700">Subir 26-27</h3>
+                            <p className="text-sm text-slate-500">Estado de reinscripción</p>
+                          </div>
+                          <div className="space-y-2">
+                            <Input
+                              type="file"
+                              accept=".xlsx,.xls"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  setSelectedFile2627(file);
+                                }
+                              }}
+                              className="hidden"
+                              id="file-26-27-upload"
+                            />
+                            <label
+                              htmlFor="file-26-27-upload"
+                              className="cursor-pointer"
+                            >
+                              <div className={`flex items-center justify-center gap-2 px-4 py-3 border-2 rounded-lg transition-all ${selectedFile2627 ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 hover:border-slate-300'}`}>
+                                <FileUp className="h-4 w-4" />
+                                <span className="text-sm font-medium">
+                                  {selectedFile2627 ? selectedFile2627.name : 'Seleccionar archivo Excel'}
+                                </span>
+                              </div>
+                            </label>
+                            <Button
+                              onClick={handleUpload2627}
+                              disabled={uploading || !selectedFile2627}
+                              className="w-full bg-blue-500 hover:bg-blue-600"
+                            >
+                              {uploading ? (
+                                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <Upload className="h-4 w-4 mr-2" />
+                              )}
+                              Subir Archivo
+                            </Button>
                           </div>
                         </div>
-                      )}
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Estado actual */}
+                  {importStatus && (
+                    <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4">
+                      <h4 className="font-semibold mb-3 flex items-center gap-2">
+                        <CheckCircle className="h-5 w-5 text-emerald-500" />
+                        Estado de Datos en Sistema
+                      </h4>
+                      <div className="grid grid-cols-3 gap-4 text-center">
+                        <div>
+                          <p className="text-2xl font-bold text-emerald-600">{importStatus.alumnos_25_26}</p>
+                          <p className="text-sm text-slate-500">Alumnos 25-26</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-blue-600">{importStatus.alumnos_26_27}</p>
+                          <p className="text-sm text-slate-500">Alumnos 26-27</p>
+                        </div>
+                        <div>
+                          <p className="text-2xl font-bold text-purple-600">{importStatus.clasificados}</p>
+                          <p className="text-sm text-slate-500">Clasificados</p>
+                        </div>
+                      </div>
                     </div>
                   )}
+
+                  {/* Acciones de procesamiento: SOLO DG */}
+                  <div className="flex flex-col sm:flex-row justify-center gap-4 pt-6">
+                    <Button
+                      onClick={() => importarDatos('25-26')}
+                      disabled={loading}
+                      variant="outline"
+                    >
+                      {loading ? (
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Upload className="h-4 w-4 mr-2" />
+                      )}
+                      Importar 25-26
+                    </Button>
+                    <Button
+                      onClick={() => importarDatos('26-27')}
+                      disabled={loading}
+                      variant="outline"
+                    >
+                      {loading ? (
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Upload className="h-4 w-4 mr-2" />
+                      )}
+                      Importar 26-27
+                    </Button>
+                    <Button
+                      onClick={procesarDatos}
+                      disabled={loading || !importStatus || (importStatus.alumnos_25_26 === 0 && importStatus.alumnos_26_27 === 0)}
+                      className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
+                    >
+                      {loading ? (
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <ArrowRightLeft className="h-4 w-4 mr-2" />
+                      )}
+                      Procesar y Clasificar
+                    </Button>
+
+                    {/* Botón Peligroso: Reset */}
+                    <Button
+                      variant="ghost"
+                      className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                      onClick={async () => {
+                        if (confirm('⚠️ ¿Estás SEGURO de querer borrar TODOS los datos? Esta acción no se puede deshacer.')) {
+                          setLoading(true);
+                          await fetch('/api/import', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'reset' })
+                          });
+                          cargarImportStatus();
+                          cargarMetricas();
+                          setLoading(false);
+                          alert('🗑️ Base de datos reiniciada');
+                        }
+                      }}
+                    >
+                      Reiniciar Sistema
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -1536,7 +1503,7 @@ export default function Dashboard() {
         </div>
       </footer >
       <LoginDialog open={status === 'unauthenticated'} />
-    </div>
+    </div >
   )
 }
 
