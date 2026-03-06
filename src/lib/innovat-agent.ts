@@ -423,24 +423,10 @@ async function descargarConInterceptor(
     const campusNorm = campus.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
     const estatus = ciclo === '2026-2027' ? -1 : 1;
 
-    // Mapeo directo de IDs proporcionado por el usuario para evitar el escaneo
-    const authMap: Record<string, string> = {
-        'CUMBRES': '1',
-        'DOMINIO': '2',
-        'MITRAS': '3',
-        'NORTE': '4',
-        'ANAHUAC': '5' // Anáhuac sin acentos
-    };
+    // Generar un arreglo del 1 al 80 para el escaneo profundo
+    const testIds = Array.from({ length: 80 }, (_, i) => String(i + 1));
 
-    // Determinar los IDs a probar: primero el hardcodeado, si no está en la lista (raro), probamos 1-10
-    const targetId = authMap[campusNorm];
-    const testIds = targetId ? [targetId] : ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
-
-    if (targetId) {
-        onStep?.({ type: 'debug', message: `🔍 Usando ID directo ${targetId} para ${campus}...` });
-    } else {
-        onStep?.({ type: 'debug', message: `🔍 Escaneando IDs 1-10 para ${campus} ("${campusNorm}")...` });
-    }
+    onStep?.({ type: 'debug', message: `🔍 Modo rastreo: Escaneando IDs 1-80 para ${campus} ("${campusNorm}")...` });
 
     try {
         for (const testId of testIds) {
