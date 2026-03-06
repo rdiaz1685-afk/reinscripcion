@@ -1616,54 +1616,7 @@ function LoginDialog({ open }: { open: boolean }) {
               )}
             </Button>
 
-            <div className="relative flex items-center gap-4 py-2">
-              <div className="flex-1 h-px bg-slate-100" />
-              <span className="text-[10px] font-bold text-slate-300 uppercase tracking-[0.2em]">O acceso directo</span>
-              <div className="flex-1 h-px bg-slate-100" />
-            </div>
 
-            <div className="space-y-4 w-full">
-              <div className="space-y-2">
-                <Label className="text-xs font-bold text-slate-600 ml-1">Correo Institucional</Label>
-                <Input
-                  id="direct-email"
-                  type="email"
-                  placeholder="nombre.apellido@cambridgemty.edu.mx"
-                  className="h-12 border-slate-100 focus:border-emerald-400 focus:ring-emerald-100 transition-all rounded-xl"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs font-bold text-slate-600 ml-1">Contraseña Maestra</Label>
-                <Input
-                  id="direct-password"
-                  type="password"
-                  placeholder="••••••••"
-                  className="h-12 border-slate-100 focus:border-emerald-400 focus:ring-emerald-100 transition-all rounded-xl"
-                />
-              </div>
-              <Button
-                className="w-full h-12 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl shadow-lg transition-all active:scale-[0.98]"
-                onClick={async () => {
-                  setLoading(true);
-                  const email = (document.getElementById('direct-email') as HTMLInputElement).value;
-                  const password = (document.getElementById('direct-password') as HTMLInputElement).value;
-
-                  const result = await signIn('credentials', {
-                    email,
-                    password,
-                    redirect: true,
-                    callbackUrl: '/'
-                  });
-
-                  if (result?.error) {
-                    alert("Error: Datos incorrectos");
-                    setLoading(false);
-                  }
-                }}
-              >
-                {loading ? <RefreshCw className="h-5 w-5 animate-spin" /> : "Ingresar Ahora"}
-              </Button>
-            </div>
 
             <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl flex items-start gap-3">
               <AlertCircle className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
