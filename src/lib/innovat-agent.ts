@@ -352,8 +352,7 @@ async function descargarConInterceptor(
                         return;
                     }
                     const bodyText = await response.text().catch(() => '');
-                    if (!bodyText || bodyText.length < 5) {
-                        onStep?.({ type: 'debug', message: `📄 Body vacío o insuficiente (status ${status}).` });
+                    if (!bodyText || bodyText.length < 5 || !bodyText.trim().startsWith('[')) {
                         return;
                     }
                     const json = JSON.parse(bodyText);
@@ -524,7 +523,6 @@ export async function syncFromInnovat(
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
-                '--js-flags="--max-old-space-size=512"', // Limitar memoria JS para evitar crashes
                 '--disable-gpu',
                 '--disable-animations'
             ],
