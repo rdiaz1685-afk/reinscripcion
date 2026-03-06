@@ -622,44 +622,39 @@ export async function syncFromInnovat(
                             const valorActual = await autocompleteInput.inputValue({ timeout: 1000 }).catch(() => '');
                             onStep?.({ type: 'debug', message: `🔍 Campo autocomplete: "${valorActual || '(vacío)'}"` });
 
-                            // Limpiar y escribir el nombre del campus para disparar el autocomplete
-                            await autocompleteInput.click();
-                            await page.waitForTimeout(400);
-                            await autocompleteInput.fill(''); // Limpiar
-                            await autocompleteInput.type(campus.substring(0, 3), { delay: 80 }); // Escribir las primeras 3 letras
-                            await page.waitForTimeout(1000); // Esperar que carguen las sugerencias
-
-                            // Buscar opciones del autocomplete de AngularJS Material
-                            const sugerencias = page.locator([
-                                'ul.md-autocomplete-suggestions li',
-                                'li[md-virtual-repeat]',
-                                'md-virtual-repeat-container li',
-                                '.md-autocomplete-suggestions-container li',
-                            ].join(', '));
-                            const countS = await sugerencias.count().catch(() => 0);
-                            onStep?.({ type: 'debug', message: `📋 ${countS} sugerencias para "${campus.substring(0, 3)}"` });
-
-                            if (countS > 0) {
-                                for (let i = 0; i < Math.min(countS, 5); i++) {
-                                    const t = await sugerencias.nth(i).textContent().catch(() => '');
-                                    onStep?.({ type: 'debug', message: `  sug[${i}]: "${t?.trim()}"` });
-                                }
-                                await sugerencias.first().click();
-                                await page.waitForTimeout(600);
-                                onStep?.({ type: 'debug', message: `✅ Unidad seleccionada del autocomplete` });
-                            } else {
-                                // Sin sugerencias → intentar con ArrowDown
+                            if (!valorActual || valorActual.trim() === '') {
+                                // Vacío: intentar ArrowDown para ver opciones
+                                await autocompleteInput.click();
+                                await page.waitForTimeout(400);
                                 await autocompleteInput.press('ArrowDown');
-                                await page.waitForTimeout(500);
-                                const trasSug = page.locator('ul.md-autocomplete-suggestions li, li[md-virtual-repeat]');
-                                if (await trasSug.count().catch(() => 0) > 0) {
-                                    await trasSug.first().click();
+                                await page.waitForTimeout(1000);
+
+                                const sugerencias = page.locator([
+                                    'ul.md-autocomplete-suggestions li',
+                                    'li[md-virtual-repeat]',
+                                    'md-virtual-repeat-container li',
+                                    '.md-autocomplete-suggestions-container li',
+                                ].join(', '));
+
+                                const countS = await sugerencias.count().catch(() => 0);
+                                if (countS > 0) {
+                                    await sugerencias.first().click();
                                     await page.waitForTimeout(600);
                                     onStep?.({ type: 'debug', message: `✅ Unidad seleccionada (ArrowDown)` });
                                 } else {
-                                    await page.keyboard.press('Escape');
-                                    onStep?.({ type: 'debug', message: `⚠️ Sin sugerencias para "${campus}" — el form enviará Ids vacío` });
+                                    // Sigue vacío: intentar escribir
+                                    await autocompleteInput.fill(campus.substring(0, 3));
+                                    await page.waitForTimeout(1500);
+                                    if (await sugerencias.count().catch(() => 0) > 0) {
+                                        await sugerencias.first().click();
+                                        onStep?.({ type: 'debug', message: `✅ Unidad seleccionada (Escrito)` });
+                                    } else {
+                                        await page.keyboard.press('Escape');
+                                        onStep?.({ type: 'debug', message: `⚠️ Sin sugerencias para "${campus}" — form enviará Ids vacío` });
+                                    }
                                 }
+                            } else {
+                                onStep?.({ type: 'debug', message: `✅ Autocomplete ya tiene valor: "${valorActual}"` });
                             }
                         } else {
                             onStep?.({ type: 'debug', message: `ℹ️ Campo Seleccione no visible — campus ya tiene IDs preseleccionados` });
