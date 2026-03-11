@@ -25,6 +25,9 @@ RUN bunx playwright install-deps chromium
 # Copiar el resto
 COPY . .
 
+# En Railway usamos PostgreSQL — reemplazar sqlite por postgresql en schema.prisma
+RUN sed -i 's/provider = "sqlite"/provider = "postgresql"/' prisma/schema.prisma
+
 # Generar Prisma
 RUN bun run db:generate
 # RUN bun run db:push # Opcional: Esto fallará si no hay DB en el build stage, se recomienda correrlo en el CMD o manualmente

@@ -148,7 +148,7 @@ def create_pdf(data: dict, output_path: str):
     por_grupo = data.get('porGrupo', [])
     
     # Encabezados de la tabla
-    headers = ['Grupo', 'Total', 'Reinscritos', 'Transf.', 'Bajas', 'Pendientes', 'Nuevos', 'Avance', 'Meta']
+    headers = ['Grupo', 'Total Inicial', 'Reinscritos', 'Transf.', 'Bajas', 'Pendientes', 'Nuevos', 'Total Ef.*', 'Avance*', 'Meta']
     
     # Construir datos de la tabla
     table_data = []
@@ -158,14 +158,19 @@ def create_pdf(data: dict, output_path: str):
     
     # Filas de datos
     for grupo in por_grupo:
+        total = grupo.get('total', 0)
+        bajas_transf = grupo.get('bajasTransferencia', 0)
+        # total efectivo: puede venir del API o calcularse aqui
+        total_efectivo = grupo.get('totalEfectivo', total - bajas_transf)
         row = [
             Paragraph(str(grupo.get('grupo', '')), cell_left_style),
-            Paragraph(str(grupo.get('total', 0)), cell_style),
+            Paragraph(str(total), cell_style),
             Paragraph(str(grupo.get('reinscritos', 0)), cell_style),
-            Paragraph(str(grupo.get('bajasTransferencia', 0)), cell_style),
+            Paragraph(str(bajas_transf), cell_style),
             Paragraph(str(grupo.get('bajasReales', 0)), cell_style),
             Paragraph(str(grupo.get('porReinscribir', 0)), cell_style),
             Paragraph(str(grupo.get('nuevos', 0)), cell_style),
+            Paragraph(str(total_efectivo), cell_style),
             Paragraph(f"{grupo.get('porcentaje', 0)}%", cell_style),
         ]
         
@@ -179,7 +184,7 @@ def create_pdf(data: dict, output_path: str):
         table_data.append(row)
     
     # Crear tabla
-    col_widths = [2*cm, 1.5*cm, 2*cm, 1.5*cm, 1.5*cm, 2*cm, 1.5*cm, 1.5*cm, 1.5*cm]
+    col_widths = [2*cm, 1.5*cm, 1.8*cm, 1.2*cm, 1.2*cm, 1.8*cm, 1.2*cm, 1.5*cm, 1.5*cm, 1.2*cm]
     main_table = Table(table_data, colWidths=col_widths, repeatRows=1)
     
     # Estilo de la tabla
@@ -212,6 +217,24 @@ def create_pdf(data: dict, output_path: str):
     story.append(main_table)
     story.append(Spacer(1, 20))
     
+    # Nota sobre el criterio de calculo
+    nota_style = ParagraphStyle(
+        'Nota',
+        fontName='Helvetica',
+        fontSize=8,
+        textColor=colors.grey,
+        alignment=TA_LEFT,
+        leading=10
+    )
+    story.append(Paragraph(
+        '* <b>Total Efectivo</b> = Total Inicial − Transferencias. '
+        'El <b>Avance</b> se calcula sobre el Total Efectivo, '
+        'descontando las transferencias del denominador '
+        '(criterio autorizado por Dirección Administrativa).',
+        nota_style
+    ))
+    story.append(Spacer(1, 15))
+
     # Leyenda de colores
     story.append(Paragraph('<b>Leyenda</b>', styles['Heading2']))
     story.append(Spacer(1, 10))

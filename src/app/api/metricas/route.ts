@@ -75,18 +75,25 @@ export async function GET(request: NextRequest) {
     const metricasPorGrupo = grupos.map(grupo => {
       const alumnosGrupo = alumnos.filter(a => a.grupo === grupo);
       const reinscritosGrupo = alumnosGrupo.filter(a => a.clasificacion === 'Reinscrito').length;
+      const bajasTransferenciaGrupo = alumnosGrupo.filter(a => a.clasificacion === 'Baja Transferencia').length;
       const metaGrupo = todasMetas.find((m: any) => m.tipo === 'grupo' && m.grupo === grupo);
+
+      // El total efectivo descuenta las transferencias: esos alumnos ya no son
+      // candidatos a reinscribirse en este grupo (autorizado por Director Administrativo).
+      const totalEfectivo = alumnosGrupo.length - bajasTransferenciaGrupo;
 
       return {
         grupo,
         total: alumnosGrupo.length,
+        totalEfectivo,
         reinscritos: reinscritosGrupo,
-        bajasTransferencia: alumnosGrupo.filter(a => a.clasificacion === 'Baja Transferencia').length,
+        bajasTransferencia: bajasTransferenciaGrupo,
         bajasReales: alumnosGrupo.filter(a => a.clasificacion === 'Baja Real').length,
         porReinscribir: alumnosGrupo.filter(a => a.clasificacion === 'Por Reinscribir').length,
         nuevos: alumnosGrupo.filter(a => a.clasificacion === 'Nuevo').length,
         candidatos: alumnosGrupo.filter(a => a.clasificacion === 'Candidato').length,
-        porcentaje: alumnosGrupo.length > 0 ? Math.round((reinscritosGrupo / alumnosGrupo.length) * 100) : 0,
+        // Porcentaje calculado sobre el total efectivo (sin transferencias)
+        porcentaje: totalEfectivo > 0 ? Math.round((reinscritosGrupo / totalEfectivo) * 100) : 0,
         meta: metaGrupo?.meta || 0,
         tipoMeta: metaGrupo?.tipoMeta || 'numero',
         valorMeta: metaGrupo?.valorMeta || 0,

@@ -47,6 +47,7 @@ interface Metricas {
 interface GrupoMetrica {
   grupo: string
   total: number
+  totalEfectivo: number
   reinscritos: number
   bajasTransferencia: number
   bajasReales: number
@@ -1029,13 +1030,14 @@ export default function Dashboard() {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="font-semibold">Grupo</TableHead>
-                        <TableHead className="text-center">Total</TableHead>
+                        <TableHead className="text-center">Total Inicial</TableHead>
                         <TableHead className="text-center">Reinscritos</TableHead>
                         <TableHead className="text-center">Transferencias</TableHead>
                         <TableHead className="text-center">Bajas</TableHead>
                         <TableHead className="text-center">Pendientes</TableHead>
                         <TableHead className="text-center">Nuevos</TableHead>
-                        <TableHead className="text-center">Avance</TableHead>
+                        <TableHead className="text-center">Total Efectivo*</TableHead>
+                        <TableHead className="text-center">Avance*</TableHead>
                         <TableHead className="text-center">Meta</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1043,7 +1045,7 @@ export default function Dashboard() {
                       {metricas?.porGrupo.map((grupo) => (
                         <TableRow key={grupo.grupo}>
                           <TableCell className="font-medium">{grupo.grupo}</TableCell>
-                          <TableCell className="text-center">{grupo.total}</TableCell>
+                          <TableCell className="text-center text-slate-500">{grupo.total}</TableCell>
                           <TableCell className="text-center">
                             <Badge variant="default" className="bg-emerald-500">
                               {grupo.reinscritos}
@@ -1070,9 +1072,14 @@ export default function Dashboard() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-center">
+                            <span className="font-semibold text-slate-800">
+                              {(grupo.totalEfectivo ?? grupo.total - grupo.bajasTransferencia)}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-center">
                             <div className="flex items-center gap-2 justify-center">
                               <Progress value={grupo.porcentaje} className="w-16 h-2" />
-                              <span className="text-sm font-medium">{grupo.porcentaje}%</span>
+                              <span className="text-sm font-bold text-emerald-700">{grupo.porcentaje}%</span>
                             </div>
                           </TableCell>
                           <TableCell className="text-center">
@@ -1092,6 +1099,9 @@ export default function Dashboard() {
                     </TableBody>
                   </Table>
                 </div>
+                <p className="text-xs text-slate-400 mt-3 px-1">
+                  * <strong>Total Efectivo</strong> = Total Inicial − Transferencias. El <strong>Avance</strong> se calcula sobre el Total Efectivo (criterio autorizado por Dirección Administrativa).
+                </p>
               </CardContent>
             </Card>
           </TabsContent>

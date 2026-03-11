@@ -73,26 +73,53 @@ export async function POST(request: NextRequest) {
 
                 // Si la descarga fue exitosa, disparar el procesamiento automático
                 if (archivosDescargados.length > 0) {
-                    send({ type: 'processing', message: '⚙️ Procesando datos descargados...' });
+                    send({ type: 'processing', message: '⚙️ Importando archivos descargados...' });
 
-                    // Llamar al endpoint de importación existente para cada par de archivos
-                    // (esto actualiza la BD que alimenta el dashboard)
                     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+                    const pathMod = await import('path');
 
-                    try {
-                        const importRes = await fetch(`${baseUrl}/api/import`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ source: 'innovat-sync', files: archivosDescargados }),
-                        });
-
-                        if (importRes.ok) {
-                            send({ type: 'ready', message: '🚀 Dashboard actualizado automáticamente.' });
-                        } else {
-                            send({ type: 'ready', message: '✅ Archivos listos. Procesa los datos desde Config.' });
+                    // Paso 1: Importar cada archivo usando solo el nombre base (no ruta absoluta)
+                    let importadosOk = 0;
+                    for (const filePath of archivosDescargados) {
+                        const fileName = pathMod.basename(filePath);
+                        const tipo = fileName.includes('25-26') ? '25-26' : '26-27';
+                        try {
+                            const importRes = await fetch(`${baseUrl}/api/import`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ fileName, tipo }),
+                            });
+                            if (importRes.ok) {
+                                send({ type: 'processing', message: `✅ Importado: ${fileName}` });
+                                importadosOk++;
+                            } else {
+                                const err = await importRes.json().catch(() => ({}));
+                                send({ type: 'error', message: `⚠️ Error importando ${fileName}: ${err.error || importRes.status}` });
+                            }
+                        } catch (e) {
+                            send({ type: 'error', message: `⚠️ Error importando ${fileName}: ${e}` });
                         }
-                    } catch {
-                        send({ type: 'ready', message: '✅ Archivos descargados. Procesa los datos desde Config.' });
+                    }
+
+                    // Paso 2: Disparar el procesamiento/clasificación solo si se importó algo
+                    if (importadosOk > 0) {
+                        send({ type: 'processing', message: '⚙️ Clasificando y procesando datos...' });
+                        try {
+                            const procRes = await fetch(`${baseUrl}/api/import`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ action: 'procesar' }),
+                            });
+                            if (procRes.ok) {
+                                send({ type: 'ready', message: '🚀 Sincronización completa. Dashboard actualizado automáticamente.' });
+                            } else {
+                                send({ type: 'ready', message: '✅ Archivos importados. Usa "Procesar Datos" en Config para clasificar.' });
+                            }
+                        } catch {
+                            send({ type: 'ready', message: '✅ Archivos importados. Usa "Procesar Datos" en Config para clasificar.' });
+                        }
+                    } else {
+                        send({ type: 'ready', message: '⚠️ No se pudo importar ningún archivo. Revisa los logs.' });
                     }
                 }
 
