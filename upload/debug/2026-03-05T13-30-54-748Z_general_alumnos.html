@@ -1,0 +1,103 @@
+<!DOCTYPE html><html ng-app="GaiaLoginApp" class="app js flexbox flexboxlegacy canvas canvastext webgl no-touch geolocation postmessage no-websqldatabase indexeddb hashchange history draganddrop websockets rgba hsla multiplebgs backgroundsize borderimage borderradius boxshadow textshadow opacity cssanimations csscolumns cssgradients cssreflections csstransforms csstransforms3d csstransitions fontface generatedcontent video audio localstorage sessionstorage webworkers no-applicationcache svg inlinesvg smil svgclippaths uk-notouch ng-scope" style=""><head><style type="text/css">@charset "UTF-8";[ng\:cloak],[ng-cloak],[data-ng-cloak],[x-ng-cloak],.ng-cloak,.x-ng-cloak,.ng-hide:not(.ng-hide-animate){display:none !important;}ng\:form{display:block;}.ng-animate-shim{visibility:hidden;}.ng-anchor{position:absolute;}</style>
+    <meta charset="UTF-8">
+    <title>Login | INNOVAT</title>
+    <meta name="viewport" content="initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="icon" type="image/png" href="/Gaia/assets/img/favicon-16x16.png" sizes="16x16">
+    <link rel="icon" type="image/png" href="/Gaia/assets/img/favicon-32x32.png" sizes="32x32">
+    <link rel="stylesheet" href="/Gaia/assets/bower_components/uikit/css/uikit.almost-flat.min.css" media="all">
+    <link href="https://fonts.googleapis.com/css?family=Roboto:400,300,500,700,400italic&amp;subset=latin" rel="stylesheet" media="all">
+    <link href="https://fonts.googleapis.com/css?family=Source+Code+Pro:400,700" rel="stylesheet" media="all">
+    <script src="/Gaia/assets/js/common.min.js"></script>
+    <script src="/Gaia/assets/js/uikit_custom.js"></script>
+    <script src="/Gaia/assets/bower_components/Waves/dist/waves.min.js"></script>
+    <script src="/Gaia/assets/js/parsleyjs_config.js"></script>
+    <script src="/Gaia/assets/bower_components/parsleyjs/dist/parsley.min.js"></script>
+    <script src="/Gaia/assets/bower_components/parsleyjs/src/i18n/es.js"></script>
+    <script src="/Gaia/assets/bower_components/angular/angular.min.js"></script>
+    <script src="/Gaia/assets/bower_components/angular-sanitize/angular-sanitize.min.js"></script>
+    <script src="/Gaia/assets/bower_components/angular-animate/angular-animate.min.js"></script>
+    <script src="/Gaia/assets/bower_components/jquery-icheck/icheck.min.js"></script>
+    <script src="/Gaia/assets/js/angular-icheck.js"></script>
+    <script src="/Gaia/assets/bower_components/angular-local-storage/dist/angular-local-storage.min.js"></script>
+    <script src="/Gaia/app/app.js"></script>
+    <script src="/Gaia/app/app.controller.js"></script>
+    <script src="/Gaia/app/app.directive.js"></script>
+    <link rel="stylesheet" href="/Gaia/assets/css/main.css" media="all" id="main_stylesheet">
+
+    <link href="/Gaia/assets/css/innovat.css" rel="stylesheet">
+</head>
+<body ng-controller="LoginController as LoginCtrl" class="ng-scope">
+    <div class="login_page_wrapper">
+        <div class="md-card" id="login_card">
+            <div class="md-card-content large-padding" id="login_form">
+                <div class="login_heading">
+                    
+                    <img ng-show="LoginCtrl.UserImage != null" ng-src="" class="user_avatar ng-hide">
+                    <div ng-show="LoginCtrl.UserImage == null" class="user_avatar"></div>
+                </div>
+<form action="/Gaia/" id="LoginForm" method="post" name="LoginForm" class="ng-pristine ng-invalid ng-invalid-required" novalidate=""><input name="__RequestVerificationToken" type="hidden" value="DLpXgSEEsDRZ2P_7eVHxEJ2Idzb9NQEIzaxZD3pADtw1L8pRc7zLVSSPy-9PswgpbkV_64_B2f091vDpbTHSmtvoLQ0lLk7hAqK8k8Yr10I1" style="">                    <div class="uk-grid uk-grid-medium">
+                        <div class="uk-width-1-1" ng-hide="LoginCtrl.blnTieneEscuela">
+                            <div class="parsley-row">
+                                <div class="md-input-wrapper md-input-focus"><label for="NombreEscuela">Escuela</label><input class="md-input ng-pristine ng-untouched ng-isolate-scope ng-invalid ng-invalid-required md-input-processed" type="text" id="NombreEscuela" name="NombreEscuela" ng-model="LoginCtrl.loginData.Escuela" md-input="" focus-me="LoginCtrl.focoEscuela" required="" data-parsley-id="4" style=""><span class="md-input-bar"></span></div>
+                                
+                            </div>
+
+                        </div>
+                        <div class="uk-width-1-1 uk-text-center ng-hide" ng-show="LoginCtrl.blnTieneEscuela" ng-mouseover="LoginCtrl.blnMostrarEdit = true" ng-mouseleave="LoginCtrl.blnMostrarEdit = false" ng-click="LoginCtrl.CambiarEscuela()">
+                            <a href="#"><h3 class="ng-binding"> <i style="position: absolute; right: 34px;" class="material-icons ng-hide" ng-show="LoginCtrl.blnMostrarEdit">mode_edit</i></h3> </a>
+
+                        </div>
+                    </div>
+                    <div class="uk-grid uk-grid-medium">
+                        <div class="uk-width-1-1">
+                            <div class="parsley-row">
+                                <div class="md-input-wrapper"><label for="NombreUsuario">Usuario</label><input class="md-input ng-pristine ng-untouched ng-isolate-scope ng-invalid ng-invalid-required md-input-processed" type="text" id="NombreUsuario" name="NombreUsuario" ng-model="LoginCtrl.loginData.userName" focus-me="LoginCtrl.focoUsuario" md-input="" required="" data-parsley-id="6" style=""><span class="md-input-bar"></span></div>
+                                
+                            </div>
+                        </div>
+                    </div>
+                    <div class="uk-grid uk-grid-medium">
+                        <div class="uk-width-1-1">
+                            <div class="parsley-row">
+                                <div class="md-input-wrapper"><label for="Contrasena">Contraseña</label><input class="md-input ng-pristine ng-untouched ng-isolate-scope ng-invalid ng-invalid-required md-input-processed" type="password" id="Contrasena" name="Contrasena" ng-model="LoginCtrl.loginData.password" md-input="" required="" data-parsley-id="8" style=""><span class="md-input-bar"></span></div>
+                                
+                            </div>
+                        </div>
+                    </div>
+                    <div class="uk-grid uk-margin-top-large">
+                        <div class="uk-width-1-1">
+                            <button type="submit" class="md-btn md-btn-primary md-btn-block md-btn-large" ng-click="LoginCtrl.login($event)">Entrar</button>
+                        </div>
+                    </div>
+                    <div class="uk-grid uk-grid-medium" ng-hide="LoginCtrl.blnTieneEscuela">
+                        <div class="uk-width-1-1">
+                            <span class="icheck-inline" ng-hide="$storageTemp.TempUsers != null">
+                                <div class="icheckbox_md"><input type="checkbox" name="chkRecordar" id="chkRecordar" icheck="" ng-model="LoginCtrl.loginData.blnRecordar" class="ng-pristine ng-untouched ng-valid" data-parsley-multiple="chkRecordar" data-parsley-id="11" style="position: absolute; top: -20%; left: -20%; display: block; width: 140%; height: 140%; margin: 0px; padding: 0px; background: rgb(255, 255, 255); border: 0px; opacity: 0;"><ins class="iCheck-helper" style="position: absolute; top: -20%; left: -20%; display: block; width: 140%; height: 140%; margin: 0px; padding: 0px; background: rgb(255, 255, 255); border: 0px; opacity: 0;"></ins></div>
+                                <label for="chkRecordar" class="inline-label">Recordar la escuela</label>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="uk-grid uk-grid-medium">
+                        <div class="uk-width-1-1 uk-text-center">
+                            <a href="/Gaia/Ayuda/Recuperar">¿Olvidaste tu contraseña?</a>
+                        </div>
+                    </div>
+                        <script>
+                            UIkit.notify({
+                                message: 'Datos de acceso incorrectos',
+                                status: 'warning',
+                                timeout: 4000,
+                                group: '',
+                                pos: 'bottom-left'
+                            });
+                        </script>
+</form>            </div>
+        </div>
+
+
+    </div><div class="uk-notify uk-notify-bottom-left"><div class="uk-notify-message uk-notify-message-warning" style="opacity: 0.833591; margin-top: -6.98916px; margin-bottom: 8.33591px;"><div>Datos de acceso incorrectos</div></div></div>
+
+
+</body></html>

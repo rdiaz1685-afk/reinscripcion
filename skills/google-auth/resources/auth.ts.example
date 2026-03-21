@@ -1,0 +1,76 @@
+import NextAuth, { type DefaultSession } from "next-auth";
+import Google from "next-auth/providers/google";
+import { CAMPUS_DATA, RECTORIA_EMAILS, SIMULATION_CONFIG } from "@/config/campus-config";
+
+/**
+ * Ejemplo de implementación con manejo de roles dinámicos basados en email.
+ * Este patrón permite clasificar usuarios (Rector, Director, Coordinador)
+ * sin necesidad de una base de datos externa inicialmente.
+ */
+export const { handlers, auth, signIn, signOut } = NextAuth({
+    providers: [
+        Google({
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            authorization: {
+                params: {
+                    scope: "openid email profile https://www.googleapis.com/auth/spreadsheets.readonly",
+                },
+            },
+        }),
+    ],
+    callbacks: {
+        async jwt({ token, account }) {
+            if (account) {
+                token.accessToken = account.access_token;
+            }
+            return token;
+        },
+        async session({ session, token }: { session: any, token: any }) {
+            if (session.user && session.user.email) {
+                let email = session.user.email.toLowerCase();
+                let role = "GUEST";
+                let campus = null;
+
+                // Lógica de validación contra configuración (Ejemplo Campus)
+                if (RECTORIA_EMAILS.map((e: any) => e.toLowerCase()).includes(email)) {
+                    role = "RECTOR";
+                } else {
+                    for (const [campusName, data] of Object.entries(CAMPUS_DATA)) {
+                        const directores = data.emails_directora.map(e => e.toLowerCase());
+                        const coordinadores = data.emails_coordinadores.map(e => e.toLowerCase());
+
+                        if (directores.includes(email)) {
+                            role = "DIRECTORA";
+                            campus = campusName;
+                            break;
+                        }
+                        if (coordinadores.includes(email)) {
+                            role = "COORDINADORA";
+                            campus = campusName;
+                            break;
+                        }
+                    }
+                }
+
+                session.user.role = role;
+                session.user.campus = campus;
+                session.accessToken = token.accessToken;
+            }
+            return session;
+        },
+    },
+    pages: {
+        signIn: "/",
+    },
+});
+
+declare module "next-auth" {
+    interface Session {
+        accessToken?: string;
+        user: {
+            role?: string;
+            campus?: string;
+        } & DefaultSession["user"];
+    }
+}
