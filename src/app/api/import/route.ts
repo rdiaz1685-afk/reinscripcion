@@ -18,12 +18,30 @@ function parseDate(excelDate: any): Date | null {
 
   // Si es un string, intentar varios formatos
   if (typeof excelDate === 'string') {
-    const s = excelDate.trim();
+    const s = excelDate.trim().toLowerCase();
     if (!s) return null;
+
+    // Intentar formato texto en español (ej: "16-mar", "16 de marzo", "16/mar/2026")
+    const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const textDateMatch = s.match(/^(\d{1,2})[\s\-\/]*(?:de\s*)?([a-z]{3,})[\s\-\/]*(\d{2,4})?$/);
+    
+    if (textDateMatch) {
+      const day = parseInt(textDateMatch[1], 10);
+      const monthStr = textDateMatch[2];
+      let year = textDateMatch[3] ? parseInt(textDateMatch[3], 10) : new Date().getFullYear();
+      
+      if (year < 100) year += 2000;
+      
+      const monthIndex = meses.findIndex(m => monthStr.startsWith(m));
+      if (monthIndex !== -1) {
+        const date = new Date(year, monthIndex, day);
+        if (!isNaN(date.getTime())) return date;
+      }
+    }
 
     // Intentar Parse nativo
     const d = new Date(s);
-    if (!isNaN(d.getTime())) return d;
+    if (!isNaN(d.getTime()) && d.getFullYear() > 2000) return d; // Asegurar que sea un año razonable y no 2001
 
     // Intentar formato DD/MM/YYYY o DD-MM-YYYY
     const parts = s.split(/[\/-]/);
