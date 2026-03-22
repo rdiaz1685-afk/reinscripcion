@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import PdfPrinter from 'pdfmake'
+const PdfPrinter = require('pdfmake')
 
 export async function GET(request: NextRequest) {
   try {
