@@ -8,17 +8,17 @@ const execAsync = promisify(exec)
 
 export async function GET(request: NextRequest) {
   try {
-    // Primero obtener las métricas
-    const baseUrl = process.env.RAILWAY_ENVIRONMENT
-      ? `http://localhost:${process.env.PORT || 8080}`
-      : `http://localhost:3000`
+    // Primero obtener las métricas usando el protocol y host de la petición original
+    const protocol = request.headers.get('x-forwarded-proto') || 'http'
+    const host = request.headers.get('host') || 'localhost:3000'
+    const baseUrl = `${protocol}://${host}`
 
     const metricasRes = await fetch(`${baseUrl}/api/metricas`)
 
     if (!metricasRes.ok) {
       const errorText = await metricasRes.text()
-      console.error('Error al obtener métricas para PDF:', errorText)
-      return NextResponse.json({ error: 'No se pudieron obtener las métricas' }, { status: 500 })
+      console.error(`Error al obtener métricas para PDF de ${baseUrl}:`, errorText)
+      return NextResponse.json({ error: 'No se pudieron obtener las métricas', details: errorText }, { status: 500 })
     }
 
     const metricas = await metricasRes.json()
@@ -42,10 +42,12 @@ export async function GET(request: NextRequest) {
     // Ruta al script Python
     const scriptPath = path.join(process.cwd(), 'scripts', 'generate_report_pdf.py')
 
-    // Ejecutar script Python (usando python en vez de python3 por compatibilidad)
+    // Ejecutar script Python: intenta 'python3' primero (estándar en Linux/Render Docker)
     try {
+      // Usa cross-platform 'python3' o 'python'
+      const pythonCmd = process.env.NODE_ENV === 'production' ? 'python3' : 'python'
       const { stdout, stderr } = await execAsync(
-        `python "${scriptPath}" "${jsonPath}" "${outputPath}"`,
+        `${pythonCmd} "${scriptPath}" "${jsonPath}" "${outputPath}"`,
         { maxBuffer: 1024 * 1024 * 10 }
       )
 
@@ -55,10 +57,18 @@ export async function GET(request: NextRequest) {
     } catch (execError: any) {
       console.error('Error al ejecutar script Python:', execError)
       await fs.unlink(jsonPath).catch(() => { })
-      return NextResponse.json({
-        error: 'Error al ejecutar el generador de PDF',
-        details: execError.message
-      }, { status: 500 })
+      
+      // Intenta con "python" regular como fallback por si acaso
+      try {
+        await execAsync(`python "${scriptPath}" "${jsonPath}" "${outputPath}"`, { maxBuffer: 1024 * 1024 * 10 })
+      } catch (fallbackError: any) {
+        console.error('Error Fallback script Python:', fallbackError)
+        return NextResponse.json({
+          error: 'Error al ejecutar el generador de PDF (Python no encontrado o error en script)',
+          details: execError.message || String(execError),
+          fallback: fallbackError.message
+        }, { status: 500 })
+      }
     }
 
     // Verificar que el archivo fue creado
