@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { GET as getMetricas } from '../../metricas/route'
 const PdfPrinter = require('pdfmake')
 
 export async function GET(request: NextRequest) {
   try {
-    // 1. Obtener métricas
-    const protocol = request.headers.get('x-forwarded-proto') || 'http'
-    const host = request.headers.get('host') || 'localhost:3000'
-    const baseUrl = `${protocol}://${host}`
+    // 1. Ejecutar métricas directamente a nivel código (Bypass de Red)
+    const metricasRes = await getMetricas(request)
 
-    const metricasRes = await fetch(`${baseUrl}/api/metricas?${request.nextUrl.searchParams.toString()}`)
-
-    if (!metricasRes.ok) {
+    if (metricasRes.status !== 200) {
       const errorText = await metricasRes.text()
       return NextResponse.json({ error: 'No se pudieron obtener las métricas', details: errorText }, { status: 500 })
     }
