@@ -1516,11 +1516,11 @@ export default function Dashboard() {
       </main >
 
       {/* Footer */}
-      < footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" >
+      <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         <div className="max-w-7xl mx-auto px-4 py-4 text-center text-sm text-slate-500">
-          Sistema de Seguimiento de Reinscripción Escolar | Campus MITRAS
+          Sistema de Seguimiento de Reinscripción Escolar | {usuario?.rol === 'ADMIN_CAMPUS' && usuario.unidad ? `Campus ${usuario.unidad.toUpperCase()}` : (viewAsUnidad ? `Campus ${viewAsUnidad.toUpperCase()}` : 'Vista Global')}
         </div>
-      </footer >
+      </footer>
       <LoginDialog open={status === 'unauthenticated'} />
     </div >
   )
