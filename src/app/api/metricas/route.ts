@@ -11,8 +11,15 @@ export async function GET(request: NextRequest) {
     const normalizeText = (text: string) =>
       text?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase() || "";
 
-    // Obtener alumnos
-    const todosAlumnos = await db.alumnoClasificado.findMany();
+    // Obtener alumnos, excluyendo a los de 3ro de secundaria (Noveno) porque no reinscriben (se van a prepa)
+    const todosAlumnosBD = await db.alumnoClasificado.findMany();
+    const todosAlumnos = todosAlumnosBD.filter(a => {
+      const g = (a.grado || '').toUpperCase();
+      const esTerceroSec = (g.includes('SECUNDARIA') && g.includes('3')) || 
+                           g.includes('NOVENO') || 
+                           g.includes('9NO');
+      return !esTerceroSec;
+    });
 
     const alumnos = unidad
       ? todosAlumnos.filter(a => normalizeText(a.unidad) === normalizeText(unidad))

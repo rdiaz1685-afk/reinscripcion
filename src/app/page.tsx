@@ -360,13 +360,22 @@ export default function Dashboard() {
   const exportarPDF = async () => {
     setExportingPdf(true)
     try {
-      const res = await fetch('/api/export/pdf')
+      const currentUnidad = usuario?.rol === 'ADMIN_CAMPUS' ? usuario.unidad : viewAsUnidad;
+      const queryParams = new URLSearchParams()
+      if (mesActual) queryParams.append('mes', mesActual.toString())
+      if (currentUnidad) queryParams.append('unidad', currentUnidad)
+
+      const urlToFetch = `/api/export/pdf?${queryParams.toString()}`
+      
+      const res = await fetch(urlToFetch)
       if (res.ok) {
         const blob = await res.blob()
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = 'Reporte_Reinscripcion_por_Grupo.pdf'
+        a.download = currentUnidad 
+          ? `Reporte_Reinscripcion_${currentUnidad}.pdf` 
+          : 'Reporte_Reinscripcion_Global.pdf'
         document.body.appendChild(a)
         a.click()
         window.URL.revokeObjectURL(url)
