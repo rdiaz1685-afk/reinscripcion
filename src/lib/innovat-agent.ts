@@ -469,19 +469,21 @@ async function descargarConInterceptor(
 
             let excelVisible = false;
             try {
-                await iconoExcel.waitFor({ state: 'visible', timeout: timeoutIcono });
-                excelVisible = true;
-                onStep?.({ type: 'debug', message: '✅ Icono de Excel apareció' });
-            } catch {
-                onStep?.({ type: 'debug', message: `⚠️ Timeout esperando icono de Excel (${timeoutIcono / 1000}s para ${campus} ${ciclo})` });
-                // Último recurso: buscar el icono de otras formas
-                try {
-                    const iconoAlt = page.locator('[ng-click*="Exportar"], [ng-click*="excel"], [ng-click*="Excel"]').first();
-                    if (await iconoAlt.isVisible({ timeout: 3000 })) {
+                // Hacemos el wait de forma segura. Si falla o se cierra la página, simplemente lo ignoramos.
+                await iconoExcel.waitFor({ state: 'visible', timeout: timeoutIcono }).catch(() => {});
+                
+                // Si la promesa principal ya se resolvió por red (yaSalido), ignoramos esto para no interferir
+                if (!yaSalido) {
+                    const esVisibleConfirmado = await iconoExcel.isVisible().catch(() => false);
+                    if (esVisibleConfirmado) {
                         excelVisible = true;
-                        onStep?.({ type: 'debug', message: '✅ Icono de Excel encontrado (selector alternativo)' });
+                        onStep?.({ type: 'debug', message: '✅ Icono de Excel apareció' });
                     }
-                } catch { }
+                }
+            } catch {
+                if (!yaSalido) {
+                    onStep?.({ type: 'debug', message: `⚠️ Timeout esperando icono de Excel (${timeoutIcono / 1000}s para ${campus} ${ciclo})` });
+                }
             }
 
             // Verificar si la página sigue abierta antes de continuar
