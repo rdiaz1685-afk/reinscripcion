@@ -662,6 +662,19 @@ export async function syncFromInnovat(
             acceptDownloads: true,
             viewport: { width: 1920, height: 1080 },  // Aumentado de 1280x900 a 1920x1080 para que las pestañas sean visibles
         });
+
+        // ── OPTIMIZACIÓN: Bloquear recursos innecesarios (imágenes, fuentes) ──
+        await context.route('**/*', (route) => {
+            const request = route.request();
+            const type = request.resourceType();
+            // No bloqueamos 'stylesheet' porque AngularJS podría depender de elementos visibles (layout) para clics
+            if (['image', 'media', 'font'].includes(type) || request.url().includes('google-analytics')) {
+                route.abort();
+            } else {
+                route.continue();
+            }
+        });
+
         let page = await context.newPage();
 
         // ── 1. LOGIN ──────────────────────────────────────────────────────────
