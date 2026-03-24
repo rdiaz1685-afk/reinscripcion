@@ -650,7 +650,7 @@ export async function syncFromInnovat(
 
     try {
         browser = await chromium.launch({
-            headless: true,
+            headless: process.env.NODE_ENV === 'production', // Muestra la ventana en localhost
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
@@ -742,13 +742,12 @@ export async function syncFromInnovat(
                 onStep?.({ type: 'campus', campus, ciclo });
 
                 try {
-                    // FIX CRÍTICO: Página limpia para cada campus+ciclo
-                    // Evita que handlers/timeouts del ciclo anterior corrompan el estado
+                    // FIX CRÍTICO: Limpiar página sin destruirla para no perder sessionStorage de Angular
                     if (!esPrimeraCombinacion) {
                         onStep?.({ type: 'debug', message: `♻️ Página limpia para ${campus} ${ciclo}...` });
-                        await page.close().catch(() => { });
-                        page = await context.newPage();
-                        await page.goto('https://innovat1.mx/Gaia/32.2.2/#/Inicio', { waitUntil: 'domcontentloaded', timeout: 30000 });
+                        await page.goto('https://innovat1.mx/Gaia/32.2.2/#/Inicio', { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+                        await page.waitForTimeout(1000);
+                        await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
                         await page.waitForTimeout(2000);
                     }
                     esPrimeraCombinacion = false;
