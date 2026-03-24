@@ -455,24 +455,24 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col">
       {/* Header */}
       <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-2 rounded-lg">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col xl:flex-row items-center justify-between gap-4 w-full">
+          <div className="flex items-center justify-center xl:justify-start gap-3 w-full xl:w-auto">
+            <div className="bg-gradient-to-br from-emerald-500 to-teal-600 p-2 rounded-lg shrink-0">
               <Users className="h-6 w-6 text-white" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-900 dark:text-white">
+            <div className="text-center xl:text-left">
+              <h1 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">
                 Sistema de Reinscripción
               </h1>
-              <p className="text-sm text-slate-500">Ciclo Escolar 2025-2026 → 2026-2027</p>
+              <p className="text-sm text-slate-500 text-balance">Ciclo Escolar 2025-2026 → 2026-2027</p>
             </div>
           </div>
 
           {usuario && (
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center justify-center xl:justify-end gap-4 w-full xl:w-auto">
               {/* Selector de Campus para Director General */}
               {usuario.rol === 'DIRECTOR_GENERAL' && (
-                <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-1 mr-2 border border-slate-200 dark:border-slate-700">
+                <div className="flex flex-wrap justify-center items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-1 border border-slate-200 dark:border-slate-700 w-full sm:w-auto">
                   <Button
                     variant={viewAsUnidad === null ? 'default' : 'ghost'}
                     size="sm"
@@ -495,37 +495,40 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* Botón de sincronización automática con Innovat */}
-              <InnovatSyncButton
-                onSyncComplete={() => {
-                  cargarImportStatus()
-                  cargarMetricas()
-                  cargarDashboardGeneral()
-                }}
-                campus={usuario.rol === 'ADMIN_CAMPUS' && usuario.unidad
-                  ? [usuario.unidad.toUpperCase()]
-                  : viewAsUnidad
-                    ? [viewAsUnidad.toUpperCase()]
-                    : undefined
-                }
-              />
-              <div className="flex flex-col items-end">
-                <span className="text-sm font-semibold text-slate-900 dark:text-white">
-                  {usuario.nombre}
-                </span>
-                <span className="text-xs text-slate-500">
-                  {usuario.rol === 'DIRECTOR_GENERAL' ? 'Director General' : `Admin Campus - ${usuario.unidad}`}
-                </span>
+              {/* Contenedor inferior en móvil para botón de sincronización y usuario */}
+              <div className="flex items-center justify-center gap-4 w-full sm:w-auto">
+                {/* Botón de sincronización automática con Innovat */}
+                <InnovatSyncButton
+                  onSyncComplete={() => {
+                    cargarImportStatus()
+                    cargarMetricas()
+                    cargarDashboardGeneral()
+                  }}
+                  campus={usuario.rol === 'ADMIN_CAMPUS' && usuario.unidad
+                    ? [usuario.unidad.toUpperCase()]
+                    : viewAsUnidad
+                      ? [viewAsUnidad.toUpperCase()]
+                      : undefined
+                  }
+                />
+                <div className="flex flex-col items-end hidden sm:flex">
+                  <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                    {usuario.nombre}
+                  </span>
+                  <span className="text-xs text-slate-500">
+                    {usuario.rol === 'DIRECTOR_GENERAL' ? 'Director General' : `Admin - ${usuario.unidad}`}
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => signOut()}
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 gap-2 px-2"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span className="hidden sm:inline">Salir</span>
+                </Button>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => signOut()}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50 gap-2"
-              >
-                <LogOut className="h-4 w-4" />
-                Salir
-              </Button>
             </div>
           )}
         </div>
@@ -534,11 +537,11 @@ export default function Dashboard() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-6 flex-1">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 lg:w-[400px]">
-            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
-            <TabsTrigger value="grupos">Por Grupo</TabsTrigger>
-            <TabsTrigger value="timeline">Timeline</TabsTrigger>
-            <TabsTrigger value="config">Config</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:w-[600px] h-auto gap-1 mb-8 overflow-x-auto p-1">
+            <TabsTrigger value="dashboard" className="text-xs sm:text-sm">Dashboard</TabsTrigger>
+            <TabsTrigger value="grupos" className="text-xs sm:text-sm">Por Grupo</TabsTrigger>
+            <TabsTrigger value="timeline" className="text-xs sm:text-sm">Timeline</TabsTrigger>
+            <TabsTrigger value="config" className="text-xs sm:text-sm">Config</TabsTrigger>
           </TabsList>
 
           {/* Tab Dashboard */}
@@ -555,7 +558,7 @@ export default function Dashboard() {
 
             {/* KPIs */}
             {metricas && (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
                 <Card className="bg-gradient-to-br from-slate-900 to-slate-800 text-white">
                   <CardHeader className="pb-2">
                     <CardDescription className="text-slate-300">Total a Reinscribir</CardDescription>

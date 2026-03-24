@@ -258,7 +258,8 @@ export default function InnovatSyncButton({
           border: 1px solid #1e293b;
           border-radius: 8px;
           padding: 12px;
-          width: 420px;
+          width: 100%;
+          max-width: 420px;
           max-height: 280px;
           overflow-y: auto;
         }
