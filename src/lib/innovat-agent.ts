@@ -480,6 +480,49 @@ async function descargarConInterceptor(
             }
         }, timeoutDuration);
 
+        // FIX 3.5: Segundo motor (Internal Fetch) - Si el interceptor tradicional tarda mucho, 
+        // disparamos una petición interna dentro del navegador. 
+        // El navegador maneja JSONs gigantes mucho mejor que el puente Playwright->NodeJS.
+        const internalFetchTimeout = setTimeout(async () => {
+            if (capturado || yaSalido) return;
+            onStep?.({ type: 'debug', message: `🚀 Disparando extracción interna para ${campus}...` });
+            
+            try {
+                const result = await page.evaluate(async (req) => {
+                    try {
+                        const res = await fetch(req.url, {
+                            method: 'PUT',
+                            body: req.body,
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                        if (res.status !== 200) return { error: `HTTP ${res.status}` };
+                        return await res.json();
+                    } catch (e) {
+                        return { error: String(e) };
+                    }
+                }, { url: gralalumnosReqUrl || apiUrl || '', body: gralalumnosReqBody || JSON.stringify(templateBody) });
+
+                if (result && Array.isArray(result) && !capturado) {
+                    onStep?.({ type: 'debug', message: `🔍 Extracción interna exitosa: ${result.length} alumnos` });
+                    
+                    const wb = XLSX.utils.book_new();
+                    const ws = XLSX.utils.json_to_sheet(result);
+                    XLSX.utils.book_append_sheet(wb, ws, 'Alumnos');
+                    const buffer: Buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+                    
+                    capturado = true;
+                    yaSalido = true;
+                    clearTimeout(timeoutId);
+                    await writeFile(filePath, buffer);
+                    resolve(true);
+                } else if (result?.error) {
+                    onStep?.({ type: 'debug', message: `⚠️ Falló extracción interna: ${result.error}` });
+                }
+            } catch (e) {
+                onStep?.({ type: 'debug', message: `⚠️ Error en evaluación interna: ${e}` });
+            }
+        }, 35000); // 35 segundos de espera antes de activar el motor interno
+
         try {
             // Verificar que el botón GENERAR está habilitado antes de hacer click
             const botonHabilitado = await botonGenerar.isEnabled().catch(() => false);
@@ -492,50 +535,39 @@ async function descargarConInterceptor(
             }
 
             // CRÍTICO: Simular un click más "humano" para disparar todos los eventos de AngularJS
-            // Hacer scroll al botón para asegurar que está visible
             await botonGenerar.scrollIntoViewIfNeeded().catch(() => { });
             await page.waitForTimeout(500);
 
-            // Hacer focus en el botón
             await botonGenerar.focus().catch(() => { });
             await page.waitForTimeout(300);
 
-            // Hacer click con force: true para asegurar que se ejecuta
             await botonGenerar.click({ force: true });
             onStep?.({ type: 'debug', message: '🖱️ Click en GENERAR ejecutado' });
 
             // Esperar un momento para que AngularJS procese el click
             await page.waitForTimeout(1000);
 
-            // Esperar a que se genere la tabla en pantalla (puede tardar varios segundos)
             if (yaSalido) {
+                clearTimeout(internalFetchTimeout);
                 onStep?.({ type: 'debug', message: '✅ Saliendo: Datos ya capturados por el interceptor' });
                 return;
             }
 
             onStep?.({ type: 'debug', message: '⏳ Esperando a que aparezca el icono de Excel...' });
 
-            // FIX CRÍTICO: Esperar activamente a que aparezca el icono de Excel
-            // El icono tiene ng-if="vm.PermExcel" y solo aparece cuando la tabla está lista
-            // HTML real: <i ng-if="vm.PermExcel" class="md-icon mdi mdi-file-excel uk-float-left ng-scope" ng-click="vm.ExportarExcel()">
             const iconoExcel = page.locator(
                 'i.mdi-file-excel[ng-click*="ExportarExcel"], ' +
                 'i[class*="mdi-file-excel"][ng-click*="Exportar"], ' +
                 '[ng-click*="ExportarExcel"]'
             ).first();
 
-            // FIX: El timeout del icono DEBE ser menor al timeoutDuration total
-            // Reservar 30s para que el interceptor capture la respuesta después del click
-            const MARGEN_INTERCEPTOR = 30_000; // 30s garantizados para que el interceptor capture
+            const MARGEN_INTERCEPTOR = 30_000;
             const timeoutIcono = Math.max(15_000, timeoutDuration - MARGEN_INTERCEPTOR);
             onStep?.({ type: 'debug', message: `⏳ Esperando icono Excel (timeout: ${timeoutIcono / 1000}s)...` });
 
             let excelVisible = false;
             try {
-                // Hacemos el wait de forma segura. Si falla o se cierra la página, simplemente lo ignoramos.
                 await iconoExcel.waitFor({ state: 'visible', timeout: timeoutIcono }).catch(() => {});
-                
-                // Si la promesa principal ya se resolvió por red (yaSalido), ignoramos esto para no interferir
                 if (!yaSalido) {
                     const esVisibleConfirmado = await iconoExcel.isVisible().catch(() => false);
                     if (esVisibleConfirmado) {
@@ -549,9 +581,9 @@ async function descargarConInterceptor(
                 }
             }
 
-            // Verificar si la página sigue abierta antes de continuar
             if (page.isClosed()) {
                 if (timeoutId) clearTimeout(timeoutId);
+                clearTimeout(internalFetchTimeout);
                 resolve(false);
                 return;
             }
@@ -559,32 +591,24 @@ async function descargarConInterceptor(
             if (excelVisible && !page.isClosed() && !yaSalido) {
                 onStep?.({ type: 'debug', message: '✅ Haciendo click en icono de Excel...' });
                 await iconoExcel.click({ force: true }).catch(async () => {
-                    // Fallback: evaluar click directo desde JS por si hay overlay
                     await page.evaluate(() => {
                         const el = document.querySelector('[ng-click*="ExportarExcel"]') as HTMLElement;
                         if (el) el.click();
                     }).catch(() => { });
                 });
-                // FIX: Esperar respuesta de red después del click (mínimo 30s)
-                // Pero salir inmediatamente si ya se resolvió (yaSalido)
                 for (let i = 0; i < MARGEN_INTERCEPTOR / 500 && !yaSalido; i++) {
                     await page.waitForTimeout(500).catch(() => { });
                 }
-                if (!yaSalido) {
-                    onStep?.({ type: 'debug', message: '🖱️ Click en icono de Excel ejecutado — sin respuesta aún...' });
-                }
-            } else if (!yaSalido) {
-                onStep?.({ type: 'debug', message: '⚠️ Icono de Excel no apareció, continuando con interceptor fallback...' });
             }
 
+            clearTimeout(internalFetchTimeout);
         } catch (e) {
             if (timeoutId) clearTimeout(timeoutId);
+            clearTimeout(internalFetchTimeout);
             try {
                 page.off('response', responseHandler);
                 page.off('request', requestHandler);
-            } catch {
-                // Página ya cerrada, ignorar
-            }
+            } catch { }
             onStep?.({ type: 'debug', message: `❌ Error en click GENERAR: ${e}` });
             resolve(false);
         }
