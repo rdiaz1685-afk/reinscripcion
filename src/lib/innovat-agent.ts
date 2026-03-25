@@ -417,6 +417,13 @@ async function descargarConInterceptor(
                         return;
                     }
                     
+                    // RENDER FIX: En Render, el interceptor tradicional causa OOM al transferir JSONs gigantes
+                    // El motor interno (page.evaluate fetch) es mucho más eficiente
+                    if (process.env.RENDER_ENVIRONMENT) {
+                        onStep?.({ type: 'debug', message: `✅ Respuesta detectada - motor interno se encargará del procesamiento` });
+                        return; // Dejar que el motor interno maneje todo
+                    }
+                    
                     onStep?.({ type: 'debug', message: `📡 Capturando cuerpo masivo...` });
                     const bodyBuffer = await response.body().catch(() => Buffer.from(''));
                     onStep?.({ type: 'debug', message: `📡 Datos recibidos: ${(bodyBuffer.length / 1024).toFixed(1)} KB` });
@@ -570,7 +577,7 @@ async function descargarConInterceptor(
             } catch (e) {
                 onStep?.({ type: 'debug', message: `⚠️ Error en evaluación interna: ${e}` });
             }
-        }, 15000); // 15 segundos - activar motor interno temprano en Render
+        }, process.env.RENDER_ENVIRONMENT ? 10000 : 15000); // 10s en Render, 15s en otros entornos
 
         try {
             // Verificar que el botón GENERAR está habilitado antes de hacer click
