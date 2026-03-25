@@ -485,7 +485,50 @@ async function descargarConInterceptor(
         // El navegador maneja JSONs gigantes mucho mejor que el puente Playwright->NodeJS.
         const internalFetchTimeout = setTimeout(async () => {
             if (capturado || yaSalido) return;
+            
+            // Esperar hasta 5 segundos más si el request aún no se capturó
+            let intentos = 0;
+            while (!gralalumnosReqUrl && intentos < 10) {
+                await new Promise(r => setTimeout(r, 500));
+                intentos++;
+            }
+            
+            if (capturado || yaSalido) return;
+            
             onStep?.({ type: 'debug', message: `🚀 Disparando extracción interna para ${campus}...` });
+            
+            // Construir URL de API si no se capturó
+            let apiUrlFallback = gralalumnosReqUrl;
+            if (!apiUrlFallback) {
+                const currentUrl = page.url();
+                const match = currentUrl.match(/Gaia\/([\d\.]+)/);
+                const version = match ? match[1] : '32.3.1';
+                apiUrlFallback = `https://innovat1.mx/Gaia/${version}/api/gralalumnos`;
+                onStep?.({ type: 'debug', message: `📡 URL no capturada, usando fallback: ${apiUrlFallback}` });
+            }
+            
+            // Construir body con unit ID correcto
+            const unitId = UNIT_IDS[ciclo]?.[campus];
+            if (!unitId) {
+                onStep?.({ type: 'debug', message: `❌ No se encontró unit ID para ${campus} ${ciclo}` });
+                return;
+            }
+            
+            const templateBody = {
+                Filtro: 'Unidad', Ids: [unitId], Estatus: ciclo === '2026-2027' ? -1 : 1, OptHermanos: 'TODOS',
+                Campos: [
+                    { Alias: 'Matrícula', Codigo: 'A1', Seccion: 1, Columna: 1, Selected: true },
+                    { Alias: 'Nombre corto', Codigo: 'A5', Seccion: 1, Columna: 2, Selected: true },
+                    { Alias: 'Unidad', Codigo: 'A16', Seccion: 1, Columna: 3, Selected: true },
+                    { Alias: 'Grado', Codigo: 'A8', Seccion: 1, Columna: 4, Selected: true },
+                    { Alias: 'Grupo', Codigo: 'A9', Seccion: 1, Columna: 5, Selected: true },
+                    { Alias: 'Estatus', Codigo: 'A10', Seccion: 1, Columna: 6, Selected: true },
+                    { Alias: 'Fecha estatus', Codigo: 'A11', Seccion: 1, Columna: 7, Selected: true },
+                    { Alias: 'Comentario estatus', Codigo: 'A12', Seccion: 1, Columna: 8, Selected: true }
+                ], Tipo: 'xlsx', Hermanos: 'TODOS',
+            };
+            
+            const bodyToUse = gralalumnosReqBody || JSON.stringify(templateBody);
             
             try {
                 const result = await page.evaluate(async (req) => {
@@ -493,16 +536,20 @@ async function descargarConInterceptor(
                         const res = await fetch(req.url, {
                             method: 'PUT',
                             body: req.body,
-                            headers: { 'Content-Type': 'application/json' }
+                            credentials: 'include',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json, text/plain, */*'
+                            }
                         });
                         if (res.status !== 200) return { error: `HTTP ${res.status}` };
                         return await res.json();
                     } catch (e) {
                         return { error: String(e) };
                     }
-                }, { url: gralalumnosReqUrl || apiUrl || '', body: gralalumnosReqBody || JSON.stringify(templateBody) });
+                }, { url: apiUrlFallback, body: bodyToUse });
 
-                if (result && Array.isArray(result) && !capturado) {
+                if (result && Array.isArray(result) && result.length > 0 && !capturado) {
                     onStep?.({ type: 'debug', message: `🔍 Extracción interna exitosa: ${result.length} alumnos` });
                     
                     const wb = XLSX.utils.book_new();
@@ -517,11 +564,13 @@ async function descargarConInterceptor(
                     resolve(true);
                 } else if (result?.error) {
                     onStep?.({ type: 'debug', message: `⚠️ Falló extracción interna: ${result.error}` });
+                } else if (!Array.isArray(result) || result.length === 0) {
+                    onStep?.({ type: 'debug', message: `⚠️ Extracción interna retornó datos vacíos` });
                 }
             } catch (e) {
                 onStep?.({ type: 'debug', message: `⚠️ Error en evaluación interna: ${e}` });
             }
-        }, 35000); // 35 segundos de espera antes de activar el motor interno
+        }, 15000); // 15 segundos - activar motor interno temprano en Render
 
         try {
             // Verificar que el botón GENERAR está habilitado antes de hacer click

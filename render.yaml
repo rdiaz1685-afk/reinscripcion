@@ -3,6 +3,7 @@ services:
     name: reinscripcion-app
     runtime: docker
     dockerfilePath: ./Dockerfile
+    plan: starter  # Plan Starter Professional
     envVars:
       - key: NODE_ENV
         value: production
@@ -24,6 +25,13 @@ services:
     autoDeploy: true
     buildCommand: echo "Build handled by Dockerfile"
     startCommand: bun run start
+    # Configuración optimizada para Starter
+    disk:
+      name: reinscripcion-disk
+      mountPath: /app/upload
+      sizeGB: 1
+    # Timeouts extendidos para sincronización de Innovat
+    maxShutdownDelaySeconds: 30
     
 databases:
   - name: reinscripcion-db
