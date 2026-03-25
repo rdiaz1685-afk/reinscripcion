@@ -813,13 +813,45 @@ export async function syncFromInnovat(
                 '--disable-features=IsolateOrigins,site-per-process',
                 '--disable-web-security',
                 '--disable-features=VizDisplayCompositor',
-                ...(process.env.RENDER_ENVIRONMENT ? ['--single-process'] : [])
+                // Optimizaciones agresivas de memoria para Render
+                ...(process.env.RENDER_ENVIRONMENT ? [
+                    '--single-process',
+                    '--disable-background-networking',
+                    '--disable-background-timer-throttling',
+                    '--disable-backgrounding-occluded-windows',
+                    '--disable-breakpad',
+                    '--disable-component-extensions-with-background-pages',
+                    '--disable-extensions',
+                    '--disable-features=TranslateUI',
+                    '--disable-ipc-flooding-protection',
+                    '--disable-renderer-backgrounding',
+                    '--enable-features=NetworkService,NetworkServiceInProcess',
+                    '--force-color-profile=srgb',
+                    '--metrics-recording-only',
+                    '--no-first-run',
+                    '--disable-hang-monitor',
+                    '--disable-prompt-on-repost',
+                    '--disable-sync',
+                    '--disable-translate',
+                    '--disable-domain-reliability',
+                    '--disable-client-side-phishing-detection',
+                    '--memory-pressure-off',
+                    // Límites de memoria explícitos
+                    '--max-old-space-size=512',
+                    '--js-flags=--max-old-space-size=512',
+                    '--disable-software-rasterizer',
+                    '--disable-canvas-aa',
+                    '--disable-2d-canvas-clip-aa',
+                    '--disable-gl-drawing-for-tests'
+                ] : [])
             ],
         });
 
         const context = await browser.newContext({
             acceptDownloads: true,
-            viewport: { width: 1920, height: 1080 },  // Aumentado de 1280x900 a 1920x1080 para que las pestañas sean visibles
+            viewport: { width: 1280, height: 720 },  // Reducido para ahorrar memoria en Render
+            // Deshabilitar JavaScript innecesario para reducir memoria
+            javaScriptEnabled: true, // Necesario para AngularJS
         });
 
         // ── OPTIMIZACIÓN: Bloquear recursos innecesarios (imágenes, fuentes) ──
@@ -899,6 +931,12 @@ export async function syncFromInnovat(
                 onStep?.({ type: 'campus', campus, ciclo });
 
                 try {
+                    // Verificar que el navegador sigue activo
+                    if (page.isClosed() || !browser || !browser.isConnected()) {
+                        onStep?.({ type: 'error', message: `Error en ${campus} ${ciclo}: Navegador cerrado prematuramente (posible OOM)` });
+                        break; // Salir del loop de ciclos para este campus
+                    }
+                    
                     // FIX CRÍTICO: Limpiar página sin destruirla para no perder sessionStorage de Angular
                     if (!esPrimeraCombinacion) {
                         onStep?.({ type: 'debug', message: `♻️ Página limpia para ${campus} ${ciclo}... (Soft reload)` });
@@ -909,7 +947,9 @@ export async function syncFromInnovat(
                                 window.location.hash = '/Inicio';
                             });
                             await page.waitForTimeout(2000);
-                        } catch { }
+                        } catch (e) {
+                            onStep?.({ type: 'debug', message: `⚠️ Error en soft reload: ${e}` });
+                        }
                     }
                     esPrimeraCombinacion = false;
 
