@@ -544,19 +544,7 @@ async function descargarConInterceptor(
             onStep?.({ type: 'debug', message: `📤 Body preview: ${bodyToUse.substring(0, 100)}...` });
             
             try {
-                // Cargar SheetJS en el navegador si no está disponible
-                await page.evaluate(() => {
-                    if (typeof (window as any).XLSX === 'undefined') {
-                        const script = document.createElement('script');
-                        script.src = 'https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js';
-                        document.head.appendChild(script);
-                        return new Promise((resolve) => {
-                            script.onload = resolve;
-                            script.onerror = () => resolve(null);
-                        });
-                    }
-                }).catch(() => {});
-
+                // Estrategia simplificada: guardar JSON en window y extraerlo por chunks
                 const result = await page.evaluate(async (req) => {
                     try {
                         console.log('[Motor Interno] Iniciando fetch a:', req.url);
@@ -585,28 +573,11 @@ async function descargarConInterceptor(
                             return { error: 'No es array o está vacío' };
                         }
                         
-                        // Procesar Excel dentro del navegador para evitar transferir JSON gigante
-                        console.log('[Motor Interno] Generando Excel en el navegador...');
-                        const XLSX = (window as any).XLSX;
-                        if (!XLSX) {
-                            return { error: 'SheetJS no disponible' };
-                        }
+                        // Guardar en window para extraer por chunks
+                        (window as any).__innovatData = json;
+                        console.log('[Motor Interno] Datos guardados en window');
                         
-                        const wb = XLSX.utils.book_new();
-                        const ws = XLSX.utils.json_to_sheet(json);
-                        XLSX.utils.book_append_sheet(wb, ws, 'Alumnos');
-                        const excelBuffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
-                        
-                        // Convertir a base64 para transferir
-                        const uint8Array = new Uint8Array(excelBuffer);
-                        let binary = '';
-                        for (let i = 0; i < uint8Array.length; i++) {
-                            binary += String.fromCharCode(uint8Array[i]);
-                        }
-                        const base64 = btoa(binary);
-                        
-                        console.log('[Motor Interno] Excel generado:', base64.length, 'bytes en base64');
-                        return { success: true, count, base64 };
+                        return { success: true, count };
                     } catch (e) {
                         console.error('[Motor Interno] Error:', e);
                         return { error: String(e) };
@@ -615,11 +586,37 @@ async function descargarConInterceptor(
 
                 onStep?.({ type: 'debug', message: `📥 Resultado: ${result.success ? `${result.count} alumnos` : result.error}` });
 
-                if (result?.success && result.base64 && !capturado) {
+                if (result?.success && result.count > 0 && !capturado) {
                     onStep?.({ type: 'debug', message: `🔍 Extracción interna exitosa: ${result.count} alumnos` });
+                    onStep?.({ type: 'debug', message: `📦 Extrayendo datos en chunks de 50...` });
                     
-                    // Decodificar base64 a buffer
-                    const buffer = Buffer.from(result.base64, 'base64');
+                    const chunkSize = 50;
+                    const totalChunks = Math.ceil(result.count / chunkSize);
+                    const allData: any[] = [];
+                    
+                    for (let i = 0; i < totalChunks; i++) {
+                        const chunk = await page.evaluate((params: { index: number, size: number }) => {
+                            const data = (window as any).__innovatData || [];
+                            return data.slice(params.index * params.size, (params.index + 1) * params.size);
+                        }, { index: i, size: chunkSize });
+                        
+                        if (Array.isArray(chunk)) {
+                            allData.push(...chunk);
+                        }
+                        
+                        if ((i + 1) % 10 === 0) {
+                            onStep?.({ type: 'debug', message: `📦 Extraídos ${allData.length}/${result.count}...` });
+                        }
+                    }
+                    
+                    await page.evaluate(() => { delete (window as any).__innovatData; });
+                    
+                    onStep?.({ type: 'debug', message: `📊 Generando Excel con ${allData.length} registros...` });
+                    
+                    const wb = XLSX.utils.book_new();
+                    const ws = XLSX.utils.json_to_sheet(allData);
+                    XLSX.utils.book_append_sheet(wb, ws, 'Alumnos');
+                    const buffer: Buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
                     
                     capturado = true;
                     yaSalido = true;
