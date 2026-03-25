@@ -469,11 +469,14 @@ async function descargarConInterceptor(
 
         page.on('response', responseHandler);
 
-        // FIX 3.1: CUMBRES y ANAHUAC son los campus más grandes — necesitan timeouts largos en AMBOS ciclos
+        // FIX 3.1: En producción, timeout corto para activar fallback rápido
+        const isCloudEnv = process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
         const esCampusGrande = campus === 'CUMBRES' || campus === 'ANAHUAC';
-        const timeoutDuration = ciclo === '2026-2027'
-            ? (esCampusGrande ? 180_000 : 120_000)   // 3 min / 2 min
-            : (esCampusGrande ? 120_000 : 60_000);   // 2 min / 1 min — fix: antes era 30s para TODOS
+        const timeoutDuration = isCloudEnv 
+            ? 15_000  // 15 segundos en producción - activar fallback rápido
+            : (ciclo === '2026-2027'
+                ? (esCampusGrande ? 180_000 : 120_000)
+                : (esCampusGrande ? 120_000 : 60_000));
 
         timeoutId = setTimeout(async () => {
             try {
@@ -490,10 +493,15 @@ async function descargarConInterceptor(
             }
         }, timeoutDuration);
 
-        // FIX 3.5: Segundo motor (Internal Fetch) - Si el interceptor tradicional tarda mucho, 
-        // disparamos una petición interna dentro del navegador. 
-        // El navegador maneja JSONs gigantes mucho mejor que el puente Playwright->NodeJS.
+        // FIX 3.5: Segundo motor (Internal Fetch) - DESHABILITADO en producción
+        // En producción, usamos el fallback de fetch directo que es más confiable
         const internalFetchTimeout = setTimeout(async () => {
+            // Motor interno deshabilitado en producción - usar fallback
+            const isCloudEnv = process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
+            if (isCloudEnv) {
+                onStep?.({ type: 'debug', message: '⏭️ Motor interno deshabilitado en producción - usando fallback' });
+                return;
+            }
             if (capturado || yaSalido) return;
             
             // Esperar hasta 5 segundos más si el request aún no se capturó
