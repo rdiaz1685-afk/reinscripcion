@@ -268,43 +268,88 @@ async function cambiarCampusCiclo(
 
 // ─── Navegar a General de Alumnos ──────────────────────────────────────────
 async function navegarAGeneralDeAlumnos(page: Page, onStep?: SyncCallback): Promise<boolean> {
-    // Ir a Inicio primero para limpiar estado
     try {
-        const inicio = page.locator('a, span').filter({ hasText: /^INICIO$|^Inicio$/i }).first();
-        if (await inicio.isVisible({ timeout: 2000 })) {
-            await inicio.click();
-            await page.waitForTimeout(1000);
-        }
-    } catch { }
+        onStep?.({ type: 'debug', message: '===== NAVEGACIÓN A GENERAL DE ALUMNOS (BRUTE FORCE) =====' });
 
-    // Menú: Escolar → Información Alumnos → General de alumnos
-    try {
-        const escolar = page.locator('li, a, span, div').filter({ hasText: /^Escolar$/i }).first();
-        if (await escolar.isVisible({ timeout: 2000 })) {
-            await escolar.click();
-            await page.waitForTimeout(600);
-        }
-    } catch { }
+        // 1. Cerrar cualquier menú abierto (act_section)
+        await page.evaluate(() => {
+            const activeMenus = document.querySelectorAll('li.act_section');
+            activeMenus.forEach(m => (m as HTMLElement).click());
+        }).catch(() => {});
+        await page.waitForTimeout(400);
 
-    try {
-        const infoAlumnos = page.locator('li, a, span').filter({ hasText: /informaci[oó]n.*alumnos/i }).first();
-        if (await infoAlumnos.isVisible({ timeout: 2000 })) {
-            await infoAlumnos.click();
-            await page.waitForTimeout(500);
-        }
-    } catch { }
+        // 2. Click en Escolar
+        onStep?.({ type: 'debug', message: 'Paso 1: Click en Escolar...' });
+        const clickedEscolar = await page.evaluate(() => {
+            const spans = Array.from(document.querySelectorAll('span, a'));
+            const target = spans.find(s => s.textContent?.trim().toLowerCase() === 'escolar');
+            if (target) { (target as HTMLElement).click(); return true; }
+            return false;
+        }).catch(() => false);
+        if (!clickedEscolar) onStep?.({ type: 'debug', message: '⚠️ No se encontró el botón de Escolar' });
+        await page.waitForTimeout(600);
 
-    try {
-        const general = page.locator('li, a, span').filter({ hasText: /^general de alumnos$/i }).first();
-        if (await general.isVisible({ timeout: 2000 })) {
-            await general.click();
-            await page.waitForTimeout(2000);
-        }
-    } catch { }
+        // 3. Click en Información Alumnos
+        onStep?.({ type: 'debug', message: 'Paso 2: Click en Información Alumnos...' });
+        const clickedInfo = await page.evaluate(() => {
+            const links = Array.from(document.querySelectorAll('a'));
+            const target = links.find(a => {
+                const txt = a.textContent?.trim().toLowerCase();
+                const isVisible = (a as HTMLElement).offsetParent !== null;
+                return isVisible && (txt.includes('información alumnos') || txt.includes('informacion alumnos'));
+            });
+            if (target) { (target as HTMLElement).click(); return true; }
+            return false;
+        }).catch(() => false);
+        if (!clickedInfo) onStep?.({ type: 'debug', message: '⚠️ No se encontró el submenú Información Alumnos' });
+        await page.waitForTimeout(600);
 
-    // Verificar que el botón GENERAR está visible
-    const genBtn = page.locator('a, button').filter({ hasText: /^generar$/i }).first();
-    return await genBtn.isVisible({ timeout: 5000 }).catch(() => false);
+        // 4. Click en General de alumnos
+        onStep?.({ type: 'debug', message: 'Paso 3: Click en General de alumnos...' });
+        const clickedGral = await page.evaluate(() => {
+            const links = Array.from(document.querySelectorAll('a'));
+            const target = links.find(a => {
+                const txt = a.textContent?.trim().toLowerCase();
+                return txt.includes('general de alumnos');
+            });
+            if (target) { (target as HTMLElement).click(); return true; }
+            return false;
+        }).catch(() => false);
+        if (!clickedGral) onStep?.({ type: 'debug', message: '⚠️ No se encontró el link General de alumnos' });
+        
+        await page.waitForTimeout(1000); // Dar tiempo a que cargue la vista inicial
+
+        // Verificar que el botón GENERAR está visible en el DOM (aunque falte cargar la tabla completa)
+        const genBtn = page.locator('button, a').filter({ hasText: /^GENERAR$/i }).first();
+        const genVisible = await genBtn.isVisible({ timeout: 5000 }).catch(() => false);
+        
+        // Retornar true si la navegación pareció exitosa y el botón se asoma
+        if (genVisible) {
+            onStep?.({ type: 'debug', message: '✅ Navegación Exitosa: Botón GENERAR encontrado' });
+            return true;
+        } else {
+            // Intentar un recargo duro de la URL que Innovat usa para "General de Alumnos"
+            try {
+                const url = page.url();
+                if (!url.includes('/gralalumnos') && !url.toLowerCase().includes('general')) {
+                    onStep?.({ type: 'debug', message: '⚠️ Falló navegación UI, forzando URL directa...' });
+                    const menuUrl = await page.evaluate(() => {
+                        const target = Array.from(document.querySelectorAll('a')).find(a => a.textContent?.trim().toLowerCase().includes('general de alumnos'));
+                        return target ? target.getAttribute('href') : null;
+                    });
+                    if (menuUrl) {
+                        await page.goto(new URL(menuUrl, page.url()).toString(), { waitUntil: 'domcontentloaded', timeout: 15000 });
+                        await page.waitForTimeout(2000);
+                        return await genBtn.isVisible({ timeout: 5000 }).catch(() => false);
+                    }
+                }
+            } catch (e) { }
+            return false;
+        }
+    } catch (e) {
+        onStep?.({ type: 'debug', message: `❌ Excepción en navegación: ${e}` });
+        return false;
+    }
 }
 
 // ─── Body del request capturado la primera vez (para reutilizar en llamadas directas) ──
@@ -744,23 +789,30 @@ export async function syncFromInnovat(
                 try {
                     // FIX CRÍTICO: Limpiar página sin destruirla para no perder sessionStorage de Angular
                     if (!esPrimeraCombinacion) {
-                        onStep?.({ type: 'debug', message: `♻️ Página limpia para ${campus} ${ciclo}...` });
-                        await page.goto('https://innovat1.mx/Gaia/32.2.2/#/Inicio', { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
-                        await page.waitForTimeout(1000);
-                        await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
-                        await page.waitForTimeout(2000);
+                        onStep?.({ type: 'debug', message: `♻️ Página limpia para ${campus} ${ciclo}... (Soft reload)` });
+                        try {
+                            // Cambiamos el hash de Angular suavemente para forzar que el router se limpie
+                            // sin necesidad de refrescar todo el navegador (que causa pérdida de sesión)
+                            await page.evaluate(() => {
+                                window.location.hash = '/Inicio';
+                            });
+                            await page.waitForTimeout(2000);
+                        } catch { }
                     }
                     esPrimeraCombinacion = false;
 
                     // ── 2a. Cambiar campus/ciclo en el header
                     await cambiarCampusCiclo(page, campus, ciclo, onStep);
-                    await page.waitForTimeout(1000);
+                    
+                    // Darle mucho más tiempo al servidor de Innovat para cambiar el ciclo en la sesión
+                    // (A veces el ciclo 2026-2027 tarda bastante en cargar y si navegamos muy rápido se interrumpe)
+                    await page.waitForTimeout(4000); 
 
                     // ── 2b. Navegar a General de Alumnos
                     const navOk = await navegarAGeneralDeAlumnos(page, onStep);
                     if (!navOk) {
                         onStep?.({ type: 'debug', message: '⏳ Reintentando navegación...' });
-                        await page.waitForTimeout(2000);
+                        await page.waitForTimeout(3000);
                         await navegarAGeneralDeAlumnos(page, onStep);
                         await page.waitForTimeout(2000);
                     }
@@ -769,7 +821,8 @@ export async function syncFromInnovat(
 
                     // ── 2c. Localizar botón GENERAR
                     const botonGenerar = page.locator('a, button').filter({ hasText: /^generar$/i }).first();
-                    const genVisible = await botonGenerar.isVisible({ timeout: 8000 }).catch(() => false);
+                    // Aumentamos el timeout a 25s, porque 2026-2027 a veces es muy lento creando la vista de Cumbres/Mitras
+                    const genVisible = await botonGenerar.isVisible({ timeout: 25000 }).catch(() => false);
                     if (!genVisible) {
                         onStep?.({ type: 'error', message: `Error en ${campus} ${ciclo}: Botón GENERAR no visible` });
                         continue;
@@ -964,13 +1017,10 @@ export async function syncFromInnovat(
                         }
                     }
 
-                    // ── 2f. ASEGURAR CHECKBOXES DE CAMPOS NECESARIOS ───────────────────
-                    // Según el usuario, necesitamos: Unidad, Grado, Estatus, Fecha estatus, Comentario estatus
-                    // Estos campos están en diferentes pestañas
+                    // ── 2f. ASEGURAR CHECKBOXES DE CAMPOS NECESARIOS (TÉCNICA MITRAS) ───────────────────
                     try {
-                        onStep?.({ type: 'debug', message: '📋 Verificando checkboxes de campos necesarios...' });
+                        onStep?.({ type: 'debug', message: '📋 Configurando campos necesarios (técnica robusta)...' });
 
-                        // Lista de campos necesarios y sus pestañas
                         const camposNecesarios = [
                             { campo: 'Matrícula', tab: 'Alumno' },
                             { campo: 'Nombre corto', tab: 'Alumno' },
@@ -983,141 +1033,72 @@ export async function syncFromInnovat(
                         ];
 
                         // Agrupar por pestaña
-                        const camposPorTab: Record<string, string[]> = {};
-                        for (const { campo, tab } of camposNecesarios) {
-                            if (!camposPorTab[tab]) camposPorTab[tab] = [];
-                            camposPorTab[tab].push(campo);
-                        }
+                        const tabs = Array.from(new Set(camposNecesarios.map(c => c.tab)));
 
-                        // Procesar cada pestaña
-                        for (const [tabName, campos] of Object.entries(camposPorTab)) {
-                            // Hacer click en la pestaña
-                            const tab = page.locator('a, span').filter({ hasText: new RegExp(`^${tabName}$`, 'i') }).first();
-                            const tabVisible = await tab.isVisible({ timeout: 2000 }).catch(() => false);
+                        for (const tabName of tabs) {
+                            // 1. Intentar navegar a la pestaña
+                            const tabSelector = `a:has-text("${tabName}"), span:has-text("${tabName}"), .uk-tab a:has-text("${tabName}")`;
+                            const tabFound = await page.evaluate((name) => {
+                                const elements = Array.from(document.querySelectorAll('.uk-tab a, .uk-tab span, a, span'));
+                                const target = elements.find(el => el.textContent?.trim().toUpperCase() === name.toUpperCase());
+                                if (target) { (target as HTMLElement).click(); return true; }
+                                return false;
+                            }, tabName);
 
-                            if (tabVisible) {
-                                await tab.click();
-                                await page.waitForTimeout(1500);  // Aumentado de 600ms a 1500ms
+                            if (tabFound) {
                                 onStep?.({ type: 'debug', message: `📂 Pestaña "${tabName}" abierta` });
-
-                                // Hacer scroll hacia abajo para asegurar que los checkboxes sean visibles
-                                await page.evaluate(() => window.scrollBy(0, 200)).catch(() => { });
-                                await page.waitForTimeout(500);
-
-                                // Screenshot para debug (solo para Administrativos en ciclo 2026-2027)
-                                if (tabName === 'Administrativos' && ciclo === '2026-2027') {
-                                    await screenshot(page, `checkboxes_${campus}_${cicloCorto(ciclo)}_${tabName}`, onStep);
-
-                                    // DIAGNÓSTICO: Capturar HTML de los checkboxes
-                                    try {
-                                        const htmlContent = await page.evaluate(() => {
-                                            const tab = document.querySelector('.uk-active');
-                                            return tab ? tab.innerHTML : 'No se encontró pestaña activa';
-                                        });
-                                        onStep?.({ type: 'debug', message: `🔍 HTML de pestaña Administrativos (primeros 500 chars): ${htmlContent.substring(0, 500)}` });
-                                    } catch (e) {
-                                        onStep?.({ type: 'debug', message: `⚠️ Error capturando HTML: ${e}` });
-                                    }
-                                }
-
-                                // Verificar/activar cada checkbox
-                                for (const campo of campos) {
-                                    try {
-                                        // DIAGNÓSTICO: Para Administrativos en 2026-2027, buscar TODOS los elementos que contengan el texto del campo
-                                        if (tabName === 'Administrativos' && ciclo === '2026-2027') {
-                                            const allElements = await page.locator(`*:has-text("${campo}")`).count();
-                                            onStep?.({ type: 'debug', message: `🔍 "${campo}": ${allElements} elementos encontrados con ese texto` });
-
-                                            // Intentar obtener info del primer elemento
-                                            if (allElements > 0) {
-                                                const firstElement = page.locator(`*:has-text("${campo}")`).first();
-                                                const tagName = await firstElement.evaluate(el => el.tagName).catch(() => 'unknown');
-                                                const classes = await firstElement.evaluate(el => el.className).catch(() => 'unknown');
-                                                onStep?.({ type: 'debug', message: `   → Primer elemento: <${tagName}> class="${classes}"` });
-                                            }
-                                        }
-
-                                        // Buscar el checkbox del campo con selectores más amplios
-                                        const checkbox = page.locator([
-                                            // Selectores originales
-                                            `input[type="checkbox"] + label:has-text("${campo}")`,
-                                            `label:has-text("${campo}") input[type="checkbox"]`,
-                                            `div:has(label:text-is("${campo}")) input[type="checkbox"]`,
-                                            `.icheckbox_flat-green:has(+ label:text-is("${campo}"))`,
-                                            // Selectores adicionales más flexibles
-                                            `label:text-is("${campo}") ~ input[type="checkbox"]`,
-                                            `div:has-text("${campo}") input[type="checkbox"]`,
-                                            `input[type="checkbox"][name*="${campo}"]`,
-                                            // Para iCheck
-                                            `.icheckbox_flat-green:has(~ label:has-text("${campo}"))`,
-                                        ].join(', ')).first();
-
-                                        const checkboxVisible = await checkbox.isVisible({ timeout: 1000 }).catch(() => false);
-
-                                        if (checkboxVisible) {
-                                            const isChecked = await checkbox.isChecked().catch(() => {
-                                                // Para iCheck, verificar la clase 'checked' del contenedor
-                                                return checkbox.evaluate(node =>
-                                                    node.parentElement?.classList.contains('checked') || false
-                                                );
-                                            });
-
-                                            if (!isChecked) {
-                                                onStep?.({ type: 'debug', message: `  ✓ Activando "${campo}"` });
-                                                await checkbox.click({ force: true });
-                                                await page.waitForTimeout(300);
-                                            } else {
-                                                onStep?.({ type: 'debug', message: `  ✓ "${campo}" ya está activado` });
-                                            }
-                                        } else {
-                                            onStep?.({ type: 'debug', message: `  ⚠️ Checkbox "${campo}" no visible` });
-                                        }
-                                    } catch (e) {
-                                        onStep?.({ type: 'debug', message: `  ⚠️ Error con checkbox "${campo}": ${e}` });
-                                    }
-                                }
-                            } else {
-                                onStep?.({ type: 'debug', message: `⚠️ Pestaña "${tabName}" NO visible - intentando buscar checkboxes directamente` });
-
-                                // FALLBACK: Buscar checkboxes sin pestañas (pueden estar todos visibles)
-                                for (const campo of campos) {
-                                    try {
-                                        const checkbox = page.locator([
-                                            `input[type="checkbox"][id*="${campo}"]`,
-                                            `label:has-text("${campo}") input[type="checkbox"]`,
-                                            `div:has-text("${campo}") input[type="checkbox"]`,
-                                        ].join(', ')).first();
-
-                                        const checkboxVisible = await checkbox.isVisible({ timeout: 1000 }).catch(() => false);
-
-                                        if (checkboxVisible) {
-                                            const isChecked = await checkbox.isChecked().catch(() => false);
-
-                                            if (!isChecked) {
-                                                onStep?.({ type: 'debug', message: `  ✓ Activando "${campo}" (sin pestaña)` });
-                                                await checkbox.click({ force: true });
-                                                await page.waitForTimeout(300);
-                                            } else {
-                                                onStep?.({ type: 'debug', message: `  ✓ "${campo}" ya activado (sin pestaña)` });
-                                            }
-                                        }
-                                    } catch (e) {
-                                        // Ignorar errores en fallback
-                                    }
-                                }
+                                await page.waitForTimeout(1000);
                             }
-                        }
 
-                        // Volver a la primera pestaña (Alumno)
-                        const tabAlumno = page.locator('a, span').filter({ hasText: /^Alumno$/i }).first();
-                        if (await tabAlumno.isVisible({ timeout: 1000 })) {
-                            await tabAlumno.click();
+                            // 2. Ejecutar técnica robusta de marcado (Add-only)
+                            const camposDeEstaTab = camposNecesarios.filter(c => c.tab === tabName).map(c => c.campo);
+                            
+                            await page.evaluate(({ campos, tab }) => {
+                                console.log(`[InnovatAgent] Verificando campos en ${tab}:`, campos);
+                                const labels = Array.from(document.querySelectorAll('label'));
+                                
+                                for (const campo of campos) {
+                                    const targetText = campo.toUpperCase();
+                                    // Buscar label que contenga o sea exactamente el campo
+                                    const lbl = labels.find(l => {
+                                        const txt = l.textContent?.trim().toUpperCase() || '';
+                                        return txt === targetText || txt.startsWith(targetText);
+                                    });
+
+                                    if (lbl) {
+                                        // Buscar el input asociado (puede estar dentro o ser hermano)
+                                        const input = (lbl.querySelector('input[type="checkbox"]') || 
+                                                       lbl.parentElement?.querySelector('input[type="checkbox"]') ||
+                                                       document.querySelector(`input[id="${lbl.getAttribute('for')}"]`)) as HTMLInputElement;
+                                        
+                                        if (input) {
+                                            // SI NO ESTÁ MARCADO, LO MARCAMOS. 
+                                            // SI YA ESTÁ MARCADO, LO DEJAMOS (No afectamos la selección previa)
+                                            const isChecked = input.checked || 
+                                                              input.parentElement?.classList.contains('checked') || 
+                                                              input.closest('.icheckbox_flat-green')?.classList.contains('checked');
+                                            
+                                            if (!isChecked) {
+                                                console.log(`[InnovatAgent] Marcando campo: ${campo}`);
+                                                lbl.click();
+                                            }
+                                        }
+                                    }
+                                }
+                            }, { campos: camposDeEstaTab, tab: tabName });
+                            
                             await page.waitForTimeout(400);
                         }
 
-                        onStep?.({ type: 'debug', message: '✅ Checkboxes verificados' });
+                        // Volver a la pestaña principal Alumno
+                        await page.evaluate(() => {
+                            const alum = Array.from(document.querySelectorAll('.uk-tab a')).find(a => a.textContent?.trim().toUpperCase() === 'ALUMNO');
+                            if (alum) (alum as HTMLElement).click();
+                        }).catch(() => {});
+
+                        onStep?.({ type: 'debug', message: '✅ Campos configurados correctamente' });
                     } catch (e) {
-                        onStep?.({ type: 'debug', message: `⚠️ Error al verificar checkboxes: ${e}` });
+                        onStep?.({ type: 'debug', message: `⚠️ Error al configurar campos: ${e}` });
                     }
 
                     // ── ESPERA CRÍTICA: Dar tiempo al formulario para que se actualice completamente ───
