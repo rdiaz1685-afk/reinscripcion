@@ -540,9 +540,13 @@ async function descargarConInterceptor(
             
             const bodyToUse = gralalumnosReqBody || JSON.stringify(templateBody);
             
+            onStep?.({ type: 'debug', message: `📤 Fetch URL: ${apiUrlFallback}` });
+            onStep?.({ type: 'debug', message: `📤 Body preview: ${bodyToUse.substring(0, 100)}...` });
+            
             try {
                 const result = await page.evaluate(async (req) => {
                     try {
+                        console.log('[Motor Interno] Iniciando fetch a:', req.url);
                         const res = await fetch(req.url, {
                             method: 'PUT',
                             body: req.body,
@@ -552,12 +556,24 @@ async function descargarConInterceptor(
                                 'Accept': 'application/json, text/plain, */*'
                             }
                         });
-                        if (res.status !== 200) return { error: `HTTP ${res.status}` };
-                        return await res.json();
+                        console.log('[Motor Interno] Status:', res.status);
+                        
+                        if (res.status !== 200) {
+                            const errorText = await res.text().catch(() => 'no body');
+                            return { error: `HTTP ${res.status}: ${errorText.substring(0, 200)}` };
+                        }
+                        
+                        console.log('[Motor Interno] Parseando JSON...');
+                        const json = await res.json();
+                        console.log('[Motor Interno] JSON recibido, length:', Array.isArray(json) ? json.length : 'no-array');
+                        return json;
                     } catch (e) {
+                        console.error('[Motor Interno] Error:', e);
                         return { error: String(e) };
                     }
                 }, { url: apiUrlFallback, body: bodyToUse });
+
+                onStep?.({ type: 'debug', message: `📥 Resultado del motor interno: ${JSON.stringify(result).substring(0, 150)}` });
 
                 if (result && Array.isArray(result) && result.length > 0 && !capturado) {
                     onStep?.({ type: 'debug', message: `🔍 Extracción interna exitosa: ${result.length} alumnos` });
@@ -575,7 +591,7 @@ async function descargarConInterceptor(
                 } else if (result?.error) {
                     onStep?.({ type: 'debug', message: `⚠️ Falló extracción interna: ${result.error}` });
                 } else if (!Array.isArray(result) || result.length === 0) {
-                    onStep?.({ type: 'debug', message: `⚠️ Extracción interna retornó datos vacíos` });
+                    onStep?.({ type: 'debug', message: `⚠️ Extracción interna retornó datos vacíos o no es array` });
                 }
             } catch (e) {
                 onStep?.({ type: 'debug', message: `⚠️ Error en evaluación interna: ${e}` });
