@@ -580,7 +580,7 @@ async function descargarConInterceptor(
             } catch (e) {
                 onStep?.({ type: 'debug', message: `⚠️ Error en evaluación interna: ${e}` });
             }
-        }, process.env.RENDER_ENVIRONMENT ? 10000 : 15000); // 10s en Render, 15s en otros entornos
+        }, (process.env.RENDER_ENVIRONMENT || process.env.NODE_ENV === 'production') ? 5000 : 15000); // 5s en producción, 15s en desarrollo
 
         try {
             // Verificar que el botón GENERAR está habilitado antes de hacer click
@@ -609,6 +609,19 @@ async function descargarConInterceptor(
             if (yaSalido) {
                 clearTimeout(internalFetchTimeout);
                 onStep?.({ type: 'debug', message: '✅ Saliendo: Datos ya capturados por el interceptor' });
+                return;
+            }
+
+            // En producción, el motor interno maneja todo - no necesitamos esperar el icono de Excel
+            const isCloudEnv = process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
+            if (isCloudEnv) {
+                onStep?.({ type: 'debug', message: '⏳ Esperando motor interno (5s)...' });
+                // Esperar a que el motor interno complete (timeout + margen)
+                const waitTime = Math.max(10000, timeoutDuration - 50000);
+                for (let i = 0; i < waitTime / 500 && !yaSalido; i++) {
+                    await page.waitForTimeout(500).catch(() => {});
+                }
+                clearTimeout(internalFetchTimeout);
                 return;
             }
 
