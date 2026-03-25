@@ -417,16 +417,17 @@ async function descargarConInterceptor(
                         return;
                     }
                     const bodyText = await response.text().catch(() => '');
-                    if (!bodyText || bodyText.length < 5 || !bodyText.trim().startsWith('[')) {
+                    if (!bodyText || bodyText.length < 5 || (!bodyText.trim().startsWith('[') && !bodyText.trim().startsWith('{'))) {
                         return;
                     }
                     const json = JSON.parse(bodyText);
+                    const result = Array.isArray(json) ? json : (json.data || json.items || []);
 
-                    if (Array.isArray(json) && json.length > 0) {
-                        onStep?.({ type: 'debug', message: `📊 ${json.length} alumnos → Excel...` });
+                    if (Array.isArray(result) && result.length > 0) {
+                        onStep?.({ type: 'debug', message: `📊 ${result.length} alumnos → Excel...` });
                         const XLSX = await import('xlsx');
                         const wb = XLSX.utils.book_new();
-                        const ws = XLSX.utils.json_to_sheet(json);
+                        const ws = XLSX.utils.json_to_sheet(result);
                         XLSX.utils.book_append_sheet(wb, ws, 'Alumnos');
                         const buffer: Buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
                         capturado = true;
@@ -435,8 +436,10 @@ async function descargarConInterceptor(
                         page.off('response', responseHandler);
                         page.off('request', requestHandler);
                         await writeFile(filePath, buffer);
-                        onStep?.({ type: 'debug', message: `💾 Excel: ${json.length} alumnos → ${buffer.length} bytes` });
+                        onStep?.({ type: 'debug', message: `💾 Excel: ${result.length} alumnos → ${buffer.length} bytes` });
                         resolve(true);
+                    } else {
+                        onStep?.({ type: 'debug', message: `ℹ️ JSON capturado pero no es una lista válida: ${JSON.stringify(json).substring(0, 100)}` });
                     }
                 }
             } catch (e) {
@@ -495,6 +498,11 @@ async function descargarConInterceptor(
             await page.waitForTimeout(1000);
 
             // Esperar a que se genere la tabla en pantalla (puede tardar varios segundos)
+            if (yaSalido) {
+                onStep?.({ type: 'debug', message: '✅ Saliendo: Datos ya capturados por el interceptor' });
+                return;
+            }
+
             onStep?.({ type: 'debug', message: '⏳ Esperando a que aparezca el icono de Excel...' });
 
             // FIX CRÍTICO: Esperar activamente a que aparezca el icono de Excel
