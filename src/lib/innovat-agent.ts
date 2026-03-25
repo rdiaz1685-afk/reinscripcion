@@ -322,7 +322,7 @@ async function navegarAGeneralDeAlumnos(page: Page, onStep?: SyncCallback): Prom
 
         // Verificar que el botón GENERAR está visible en el DOM (aunque falte cargar la tabla completa)
         const genBtn = page.locator('button, a').filter({ hasText: /^GENERAR$/i }).first();
-        const genVisible = await genBtn.isVisible({ timeout: 5000 }).catch(() => false);
+        const genVisible = await genBtn.isVisible().catch(() => false);
         
         // Retornar true si la navegación pareció exitosa y el botón se asoma
         if (genVisible) {
@@ -341,7 +341,7 @@ async function navegarAGeneralDeAlumnos(page: Page, onStep?: SyncCallback): Prom
                     if (menuUrl) {
                         await page.goto(new URL(menuUrl, page.url()).toString(), { waitUntil: 'domcontentloaded', timeout: 15000 });
                         await page.waitForTimeout(2000);
-                        return await genBtn.isVisible({ timeout: 5000 }).catch(() => false);
+                        return await genBtn.isVisible().catch(() => false);
                     }
                 }
             } catch (e) { }
@@ -590,7 +590,15 @@ async function descargarConInterceptor(
 
     if (exito) return true;
 
-    const apiUrl = gralalumnosReqUrl ?? 'https://innovat1.mx/Gaia/32.2.2/api/gralalumnos';
+    // FIX 3.2: Detectar URL de la API dinámicamente o usar fallback v32.3.1
+    let apiUrl = gralalumnosReqUrl;
+    if (!apiUrl) {
+        const currentUrl = page.url(); // Ej: https://innovat1.mx/Gaia/32.3.1/#/Inicio
+        const match = currentUrl.match(/Gaia\/([\d\.]+)/);
+        const version = match ? match[1] : '32.3.1';
+        apiUrl = `https://innovat1.mx/Gaia/${version}/api/gralalumnos`;
+        onStep?.({ type: 'debug', message: `📡 Intentando conexión directa con API v${version}...` });
+    }
 
     // Columnas exactas que tiene MITRAS:
     // A1: Matrícula, A5: Nombre corto, A16: Unidad, A8: Grado, A9: Grupo, A10: Estatus, A11: Fecha estatus
@@ -838,7 +846,7 @@ export async function syncFromInnovat(
                     // ── 2c. Localizar botón GENERAR
                     const botonGenerar = page.locator('a, button').filter({ hasText: /^generar$/i }).first();
                     // Aumentamos el timeout a 25s, porque 2026-2027 a veces es muy lento creando la vista de Cumbres/Mitras
-                    const genVisible = await botonGenerar.isVisible({ timeout: 25000 }).catch(() => false);
+                    const genVisible = await botonGenerar.isVisible().catch(() => false);
                     if (!genVisible) {
                         onStep?.({ type: 'error', message: `Error en ${campus} ${ciclo}: Botón GENERAR no visible` });
                         continue;
@@ -1013,7 +1021,7 @@ export async function syncFromInnovat(
                             // Buscar el label "Ambos" y luego el ins helper
                             const labelAmbos = page.locator('label').filter({ hasText: /^Ambos$/i }).first();
 
-                            if (await labelAmbos.isVisible({ timeout: 2000 })) {
+                            if (await labelAmbos.isVisible().catch(() => false)) {
                                 // Hacer click directamente en el label (iCheck lo maneja)
                                 onStep?.({ type: 'debug', message: '✅ Seleccionando "Ambos"...' });
                                 await labelAmbos.click({ force: true });
