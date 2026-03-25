@@ -412,26 +412,28 @@ async function descargarConInterceptor(
                 if (url.includes('gralalumnos')) {
                     onStep?.({ type: 'debug', message: `📄 gralalumnos status: ${status}` });
                     if (status !== 200) {
-                        // Log del error
                         const errBody = await response.text().catch(() => '');
                         onStep?.({ type: 'debug', message: `❌ Error ${status}: ${errBody.substring(0, 200)}` });
                         return;
                     }
-                    const bodyText = await response.text().catch(() => '');
-                    onStep?.({ type: 'debug', message: `📡 Recibido cuerpo de respuesta (${bodyText.length} bytes)` });
+                    
+                    onStep?.({ type: 'debug', message: `📡 Capturando cuerpo masivo...` });
+                    const bodyBuffer = await response.body().catch(() => Buffer.from(''));
+                    onStep?.({ type: 'debug', message: `📡 Datos recibidos: ${(bodyBuffer.length / 1024).toFixed(1)} KB` });
 
-                    if (!bodyText || bodyText.length < 5 || (!bodyText.trim().startsWith('[') && !bodyText.trim().startsWith('{'))) {
-                        return;
-                    }
+                    if (bodyBuffer.length < 10) return;
 
-                    const json = JSON.parse(bodyText);
+                    // Pequeña pausa para permitir que el event loop de NodeJS procese logs y no muera por OOM
+                    await new Promise(r => setTimeout(r, 200));
+                    
+                    const bodyString = bodyBuffer.toString('utf-8');
+                    const json = JSON.parse(bodyString);
                     const result = Array.isArray(json) ? json : (json.data || json.items || []);
 
                     if (Array.isArray(result) && result.length > 0) {
                         onStep?.({ type: 'debug', message: `📊 Procesando ${result.length} alumnos para Excel...` });
                         
-                        // Pequeña pausa para permitir que los logs se envíen antes de la carga pesada
-                        await new Promise(r => setTimeout(r, 100));
+                        await new Promise(r => setTimeout(r, 200));
 
                         const wb = XLSX.utils.book_new();
                         const ws = XLSX.utils.json_to_sheet(result);
@@ -447,7 +449,7 @@ async function descargarConInterceptor(
                         onStep?.({ type: 'debug', message: `💾 Excel: ${result.length} alumnos → ${buffer.length} bytes` });
                         resolve(true);
                     } else {
-                        onStep?.({ type: 'debug', message: `ℹ️ JSON recibido pero no contiene una lista válida: ${JSON.stringify(json).substring(0, 100)}` });
+                        onStep?.({ type: 'debug', message: `ℹ️ JSON recibido pero no contiene una lista válida: ${JSON.stringify(json || {}).substring(0, 100)}` });
                     }
                 }
             } catch (e) {
