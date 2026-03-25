@@ -417,9 +417,12 @@ async function descargarConInterceptor(
                         return;
                     }
                     
-                    // RENDER FIX: En Render, el interceptor tradicional causa OOM al transferir JSONs gigantes
+                    // RENDER/RAILWAY FIX: En entornos cloud, el interceptor tradicional causa OOM
                     // El motor interno (page.evaluate fetch) es mucho más eficiente
-                    if (process.env.RENDER_ENVIRONMENT) {
+                    const isCloudEnv = process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
+                    onStep?.({ type: 'debug', message: `🔍 Env check: RENDER=${process.env.RENDER_ENVIRONMENT} NODE_ENV=${process.env.NODE_ENV} isCloud=${isCloudEnv}` });
+                    
+                    if (isCloudEnv) {
                         onStep?.({ type: 'debug', message: `✅ Respuesta detectada - motor interno se encargará del procesamiento` });
                         return; // Dejar que el motor interno maneje todo
                     }
