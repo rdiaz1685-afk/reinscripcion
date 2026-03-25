@@ -56,7 +56,7 @@ export type SyncCallback = (step: SyncStep) => void;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 async function getUploadDir(): Promise<string> {
-    const dir = process.env.RAILWAY_ENVIRONMENT
+    const dir = (process.env.RAILWAY_ENVIRONMENT || process.env.RENDER_ENVIRONMENT)
         ? '/app/upload'
         : join(process.cwd(), 'upload');
     await mkdir(dir, { recursive: true });
@@ -64,7 +64,7 @@ async function getUploadDir(): Promise<string> {
 }
 
 async function getDebugDir(): Promise<string> {
-    const dir = process.env.RAILWAY_ENVIRONMENT
+    const dir = (process.env.RAILWAY_ENVIRONMENT || process.env.RENDER_ENVIRONMENT)
         ? '/app/upload/debug'
         : join(process.cwd(), 'upload', 'debug');
     await mkdir(dir, { recursive: true });
@@ -745,13 +745,19 @@ export async function syncFromInnovat(
 
     try {
         browser = await chromium.launch({
-            headless: process.env.NODE_ENV === 'production', // Muestra la ventana en localhost
+            headless: process.env.NODE_ENV === 'production',
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
-                '--disable-animations'
+                '--disable-animations',
+                // Configuración adicional para Render y entornos cloud
+                '--disable-blink-features=AutomationControlled',
+                '--disable-features=IsolateOrigins,site-per-process',
+                '--disable-web-security',
+                '--disable-features=VizDisplayCompositor',
+                ...(process.env.RENDER_ENVIRONMENT ? ['--single-process'] : [])
             ],
         });
 
