@@ -544,6 +544,19 @@ async function descargarConInterceptor(
             onStep?.({ type: 'debug', message: `📤 Body preview: ${bodyToUse.substring(0, 100)}...` });
             
             try {
+                // Cargar SheetJS en el navegador si no está disponible
+                await page.evaluate(() => {
+                    if (typeof (window as any).XLSX === 'undefined') {
+                        const script = document.createElement('script');
+                        script.src = 'https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js';
+                        document.head.appendChild(script);
+                        return new Promise((resolve) => {
+                            script.onload = resolve;
+                            script.onerror = () => resolve(null);
+                        });
+                    }
+                }).catch(() => {});
+
                 const result = await page.evaluate(async (req) => {
                     try {
                         console.log('[Motor Interno] Iniciando fetch a:', req.url);
@@ -565,33 +578,59 @@ async function descargarConInterceptor(
                         
                         console.log('[Motor Interno] Parseando JSON...');
                         const json = await res.json();
-                        console.log('[Motor Interno] JSON recibido, length:', Array.isArray(json) ? json.length : 'no-array');
-                        return json;
+                        const count = Array.isArray(json) ? json.length : 0;
+                        console.log('[Motor Interno] JSON recibido, length:', count);
+                        
+                        if (!Array.isArray(json) || count === 0) {
+                            return { error: 'No es array o está vacío' };
+                        }
+                        
+                        // Procesar Excel dentro del navegador para evitar transferir JSON gigante
+                        console.log('[Motor Interno] Generando Excel en el navegador...');
+                        const XLSX = (window as any).XLSX;
+                        if (!XLSX) {
+                            return { error: 'SheetJS no disponible' };
+                        }
+                        
+                        const wb = XLSX.utils.book_new();
+                        const ws = XLSX.utils.json_to_sheet(json);
+                        XLSX.utils.book_append_sheet(wb, ws, 'Alumnos');
+                        const excelBuffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+                        
+                        // Convertir a base64 para transferir
+                        const uint8Array = new Uint8Array(excelBuffer);
+                        let binary = '';
+                        for (let i = 0; i < uint8Array.length; i++) {
+                            binary += String.fromCharCode(uint8Array[i]);
+                        }
+                        const base64 = btoa(binary);
+                        
+                        console.log('[Motor Interno] Excel generado:', base64.length, 'bytes en base64');
+                        return { success: true, count, base64 };
                     } catch (e) {
                         console.error('[Motor Interno] Error:', e);
                         return { error: String(e) };
                     }
                 }, { url: apiUrlFallback, body: bodyToUse });
 
-                onStep?.({ type: 'debug', message: `📥 Resultado del motor interno: ${JSON.stringify(result).substring(0, 150)}` });
+                onStep?.({ type: 'debug', message: `📥 Resultado: ${result.success ? `${result.count} alumnos` : result.error}` });
 
-                if (result && Array.isArray(result) && result.length > 0 && !capturado) {
-                    onStep?.({ type: 'debug', message: `🔍 Extracción interna exitosa: ${result.length} alumnos` });
+                if (result?.success && result.base64 && !capturado) {
+                    onStep?.({ type: 'debug', message: `🔍 Extracción interna exitosa: ${result.count} alumnos` });
                     
-                    const wb = XLSX.utils.book_new();
-                    const ws = XLSX.utils.json_to_sheet(result);
-                    XLSX.utils.book_append_sheet(wb, ws, 'Alumnos');
-                    const buffer: Buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+                    // Decodificar base64 a buffer
+                    const buffer = Buffer.from(result.base64, 'base64');
                     
                     capturado = true;
                     yaSalido = true;
                     clearTimeout(timeoutId);
                     await writeFile(filePath, buffer);
+                    onStep?.({ type: 'debug', message: `💾 Excel guardado: ${buffer.length} bytes` });
                     resolve(true);
                 } else if (result?.error) {
                     onStep?.({ type: 'debug', message: `⚠️ Falló extracción interna: ${result.error}` });
-                } else if (!Array.isArray(result) || result.length === 0) {
-                    onStep?.({ type: 'debug', message: `⚠️ Extracción interna retornó datos vacíos o no es array` });
+                } else {
+                    onStep?.({ type: 'debug', message: `⚠️ Extracción interna sin resultado válido` });
                 }
             } catch (e) {
                 onStep?.({ type: 'debug', message: `⚠️ Error en evaluación interna: ${e}` });
