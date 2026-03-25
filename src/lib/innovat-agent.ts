@@ -11,6 +11,7 @@
 import { chromium, Browser, Page } from 'playwright';
 import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
+import * as XLSX from 'xlsx';
 
 // ─── Configuración ─────────────────────────────────────────────────────────
 const INNOVAT_URL = 'https://innovat1.mx/Gaia/login';
@@ -417,19 +418,26 @@ async function descargarConInterceptor(
                         return;
                     }
                     const bodyText = await response.text().catch(() => '');
+                    onStep?.({ type: 'debug', message: `📡 Recibido cuerpo de respuesta (${bodyText.length} bytes)` });
+
                     if (!bodyText || bodyText.length < 5 || (!bodyText.trim().startsWith('[') && !bodyText.trim().startsWith('{'))) {
                         return;
                     }
+
                     const json = JSON.parse(bodyText);
                     const result = Array.isArray(json) ? json : (json.data || json.items || []);
 
                     if (Array.isArray(result) && result.length > 0) {
-                        onStep?.({ type: 'debug', message: `📊 ${result.length} alumnos → Excel...` });
-                        const XLSX = await import('xlsx');
+                        onStep?.({ type: 'debug', message: `📊 Procesando ${result.length} alumnos para Excel...` });
+                        
+                        // Pequeña pausa para permitir que los logs se envíen antes de la carga pesada
+                        await new Promise(r => setTimeout(r, 100));
+
                         const wb = XLSX.utils.book_new();
                         const ws = XLSX.utils.json_to_sheet(result);
                         XLSX.utils.book_append_sheet(wb, ws, 'Alumnos');
                         const buffer: Buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+                        
                         capturado = true;
                         yaSalido = true;
                         clearTimeout(timeoutId);
@@ -439,11 +447,11 @@ async function descargarConInterceptor(
                         onStep?.({ type: 'debug', message: `💾 Excel: ${result.length} alumnos → ${buffer.length} bytes` });
                         resolve(true);
                     } else {
-                        onStep?.({ type: 'debug', message: `ℹ️ JSON capturado pero no es una lista válida: ${JSON.stringify(json).substring(0, 100)}` });
+                        onStep?.({ type: 'debug', message: `ℹ️ JSON recibido pero no contiene una lista válida: ${JSON.stringify(json).substring(0, 100)}` });
                     }
                 }
             } catch (e) {
-                onStep?.({ type: 'debug', message: `[response handler] ${e}` });
+                onStep?.({ type: 'debug', message: `[response handler] Error: ${e}` });
             }
         };
 
