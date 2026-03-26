@@ -512,128 +512,134 @@ async function ejecutarFallbackDirecto(
     ciclo: string,
     onStep?: SyncCallback
 ): Promise<boolean> {
-    onStep?.({ type: 'debug', message: '🔄 Ejecutando fetch directo al API de Innovat' });
-    
-    // Detectar URL de la API dinámicamente
-    const currentUrl = page.url();
-    const match = currentUrl.match(/Gaia\/([\d\.]+)/);
-    const version = match ? match[1] : '32.3.1';
-    const apiUrl = `https://innovat1.mx/Gaia/${version}/api/gralalumnos`;
-    onStep?.({ type: 'debug', message: `📡 API: ${apiUrl}` });
+    try {
+        onStep?.({ type: 'debug', message: '🔄 Ejecutando fetch directo al API de Innovat' });
+        
+        // Detectar URL de la API dinámicamente
+        const currentUrl = page.url();
+        const match = currentUrl.match(/Gaia\/([\d\.]+)/);
+        const version = match ? match[1] : '32.3.1';
+        const apiUrl = `https://innovat1.mx/Gaia/${version}/api/gralalumnos`;
+        onStep?.({ type: 'debug', message: `📡 API: ${apiUrl}` });
 
-    const templateBody = {
-        Filtro: 'Unidad', Ids: [], Estatus: 1, OptHermanos: 'TODOS',
-        Campos: [
-            { Alias: 'Matrícula', Codigo: 'A1', Seccion: 1, Columna: 1, Selected: true },
-            { Alias: 'Nombre corto', Codigo: 'A5', Seccion: 1, Columna: 2, Selected: true },
-            { Alias: 'Unidad', Codigo: 'A16', Seccion: 1, Columna: 3, Selected: true },
-            { Alias: 'Grado', Codigo: 'A8', Seccion: 1, Columna: 4, Selected: true },
-            { Alias: 'Grupo', Codigo: 'A9', Seccion: 1, Columna: 5, Selected: true },
-            { Alias: 'Estatus', Codigo: 'A10', Seccion: 1, Columna: 6, Selected: true },
-            { Alias: 'Fecha estatus', Codigo: 'A11', Seccion: 1, Columna: 7, Selected: true },
-            { Alias: 'Comentario estatus', Codigo: 'A12', Seccion: 1, Columna: 8, Selected: true }
-        ], Tipo: 'xlsx', Hermanos: 'TODOS',
-    };
+        const templateBody = {
+            Filtro: 'Unidad', Ids: [], Estatus: 1, OptHermanos: 'TODOS',
+            Campos: [
+                { Alias: 'Matrícula', Codigo: 'A1', Seccion: 1, Columna: 1, Selected: true },
+                { Alias: 'Nombre corto', Codigo: 'A5', Seccion: 1, Columna: 2, Selected: true },
+                { Alias: 'Unidad', Codigo: 'A16', Seccion: 1, Columna: 3, Selected: true },
+                { Alias: 'Grado', Codigo: 'A8', Seccion: 1, Columna: 4, Selected: true },
+                { Alias: 'Grupo', Codigo: 'A9', Seccion: 1, Columna: 5, Selected: true },
+                { Alias: 'Estatus', Codigo: 'A10', Seccion: 1, Columna: 6, Selected: true },
+                { Alias: 'Fecha estatus', Codigo: 'A11', Seccion: 1, Columna: 7, Selected: true },
+                { Alias: 'Comentario estatus', Codigo: 'A12', Seccion: 1, Columna: 8, Selected: true }
+            ], Tipo: 'xlsx', Hermanos: 'TODOS',
+        };
 
-    const unitId = UNIT_IDS[ciclo]?.[campus];
-    if (!unitId) {
-        onStep?.({ type: 'debug', message: `❌ No se encontró unit ID para ${campus} ${ciclo}` });
+        const unitId = UNIT_IDS[ciclo]?.[campus];
+        if (!unitId) {
+            onStep?.({ type: 'debug', message: `❌ No se encontró unit ID para ${campus} ${ciclo}` });
+            return false;
+        }
+
+        onStep?.({ type: 'debug', message: `🔍 Unit ID ${unitId} para ${campus} ${ciclo}` });
+
+        // Hacer click en GENERAR para activar la sesión (sin esperar respuesta)
+        try {
+            await botonGenerar.click({ force: true, timeout: 5000 });
+            await page.waitForTimeout(2000);
+        } catch (e) {
+            onStep?.({ type: 'debug', message: `⚠️ Click en GENERAR: ${e}` });
+        }
+
+        const estatusValues = ciclo === '2026-2027' ? [-1, 1, 0, 2] : [1];
+
+        for (const estatusValue of estatusValues) {
+            if (estatusValues.length > 1) {
+                onStep?.({ type: 'debug', message: `🔍 Probando Estatus: ${estatusValue}` });
+            }
+
+            const scanBody = JSON.stringify({
+                ...templateBody,
+                Filtro: 'Unidad',
+                Ids: [unitId],
+                Estatus: estatusValue
+            });
+
+            let result: { status: number; text: string; method: string };
+            try {
+                result = await page.evaluate(
+                    async ({ url, body }: { url: string; body: string }) => {
+                        for (const method of ['PUT', 'POST']) {
+                            try {
+                                const res = await fetch(url, {
+                                    method,
+                                    credentials: 'include',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Accept': 'application/json, text/plain, */*'
+                                    },
+                                    body,
+                                });
+                                const text = await res.text();
+                                return { status: res.status, text, method };
+                            } catch (e) {
+                                return { status: -1, text: String(e), method };
+                            }
+                        }
+                        return { status: 500, text: 'No se intentó ningún método', method: '' };
+                    },
+                    { url: apiUrl, body: scanBody }
+                );
+            } catch (evalError) {
+                onStep?.({ type: 'debug', message: `❌ Error en fetch: ${evalError}` });
+                continue;
+            }
+
+            if (result.status !== 200 || result.text.length < 5) {
+                const errorBody = result.text?.substring(0, 200) || '(vacío)';
+                onStep?.({ type: 'debug', message: `  Estatus ${estatusValue}: HTTP ${result.status} → ${errorBody}` });
+                continue;
+            }
+
+            let json: Record<string, unknown>[];
+            try { 
+                json = JSON.parse(result.text); 
+            } catch {
+                onStep?.({ type: 'debug', message: `  Estatus ${estatusValue}: JSON inválido` });
+                continue;
+            }
+
+            if (!Array.isArray(json) || json.length === 0) {
+                onStep?.({ type: 'debug', message: `  Estatus ${estatusValue}: respuesta vacía` });
+                continue;
+            }
+
+            onStep?.({ type: 'debug', message: `✅ ${json.length} alumnos obtenidos con Estatus ${estatusValue}` });
+            
+            // Procesar directamente en BD
+            try {
+                const guardados = await procesarYGuardarDatos(json, campus, ciclo, onStep);
+                if (guardados > 0) {
+                    onStep?.({ type: 'debug', message: `✅ ${guardados} alumnos guardados en BD` });
+                    await writeFile(filePath, Buffer.from('Procesado directamente en BD'));
+                    return true;
+                } else {
+                    onStep?.({ type: 'debug', message: `⚠️ No se guardaron registros` });
+                }
+            } catch (error) {
+                onStep?.({ type: 'debug', message: `❌ Error guardando: ${error}` });
+                onStep?.({ type: 'debug', message: `❌ Stack: ${error instanceof Error ? error.stack : 'N/A'}` });
+            }
+        }
+
+        onStep?.({ type: 'debug', message: `❌ No se encontraron datos para ${campus}` });
+        return false;
+    } catch (error) {
+        onStep?.({ type: 'debug', message: `❌ Error crítico en fallback: ${error}` });
+        onStep?.({ type: 'debug', message: `❌ Stack: ${error instanceof Error ? error.stack : 'N/A'}` });
         return false;
     }
-
-    onStep?.({ type: 'debug', message: `🔍 Unit ID ${unitId} para ${campus} ${ciclo}` });
-
-    // Hacer click en GENERAR para activar la sesión (sin esperar respuesta)
-    try {
-        await botonGenerar.click({ force: true, timeout: 5000 });
-        await page.waitForTimeout(2000);
-    } catch (e) {
-        onStep?.({ type: 'debug', message: `⚠️ Click en GENERAR: ${e}` });
-    }
-
-    const estatusValues = ciclo === '2026-2027' ? [-1, 1, 0, 2] : [1];
-
-    for (const estatusValue of estatusValues) {
-        if (estatusValues.length > 1) {
-            onStep?.({ type: 'debug', message: `🔍 Probando Estatus: ${estatusValue}` });
-        }
-
-        const scanBody = JSON.stringify({
-            ...templateBody,
-            Filtro: 'Unidad',
-            Ids: [unitId],
-            Estatus: estatusValue
-        });
-
-        let result: { status: number; text: string; method: string };
-        try {
-            result = await page.evaluate(
-                async ({ url, body }: { url: string; body: string }) => {
-                    for (const method of ['PUT', 'POST']) {
-                        try {
-                            const res = await fetch(url, {
-                                method,
-                                credentials: 'include',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Accept': 'application/json, text/plain, */*'
-                                },
-                                body,
-                            });
-                            const text = await res.text();
-                            return { status: res.status, text, method };
-                        } catch (e) {
-                            return { status: -1, text: String(e), method };
-                        }
-                    }
-                    return { status: 500, text: 'No se intentó ningún método', method: '' };
-                },
-                { url: apiUrl, body: scanBody }
-            );
-        } catch (evalError) {
-            onStep?.({ type: 'debug', message: `❌ Error en fetch: ${evalError}` });
-            continue;
-        }
-
-        if (result.status !== 200 || result.text.length < 5) {
-            const errorBody = result.text?.substring(0, 200) || '(vacío)';
-            onStep?.({ type: 'debug', message: `  Estatus ${estatusValue}: HTTP ${result.status} → ${errorBody}` });
-            continue;
-        }
-
-        let json: Record<string, unknown>[];
-        try { 
-            json = JSON.parse(result.text); 
-        } catch {
-            onStep?.({ type: 'debug', message: `  Estatus ${estatusValue}: JSON inválido` });
-            continue;
-        }
-
-        if (!Array.isArray(json) || json.length === 0) {
-            onStep?.({ type: 'debug', message: `  Estatus ${estatusValue}: respuesta vacía` });
-            continue;
-        }
-
-        onStep?.({ type: 'debug', message: `✅ ${json.length} alumnos obtenidos con Estatus ${estatusValue}` });
-        
-        // Procesar directamente en BD
-        try {
-            const guardados = await procesarYGuardarDatos(json, campus, ciclo, onStep);
-            if (guardados > 0) {
-                onStep?.({ type: 'debug', message: `✅ ${guardados} alumnos guardados en BD` });
-                await writeFile(filePath, Buffer.from('Procesado directamente en BD'));
-                return true;
-            } else {
-                onStep?.({ type: 'debug', message: `⚠️ No se guardaron registros` });
-            }
-        } catch (error) {
-            onStep?.({ type: 'debug', message: `❌ Error guardando: ${error}` });
-            onStep?.({ type: 'debug', message: `❌ Stack: ${error instanceof Error ? error.stack : 'N/A'}` });
-        }
-    }
-
-    onStep?.({ type: 'debug', message: `❌ No se encontraron datos para ${campus}` });
-    return false;
 }
 
 // ─── Descarga con Interceptor ─────────────────────────────────────────────
