@@ -109,7 +109,10 @@ async function procesarYGuardarDatos(
             return normalized;
         };
 
-        // Procesar cada alumno
+        // Procesar y preparar datos
+        const datosParaGuardar: any[] = [];
+        let procesados = 0;
+        
         for (const rawAlumno of jsonData) {
             const alumno = normalizeKey(rawAlumno);
             
@@ -133,24 +136,53 @@ async function procesarYGuardarDatos(
             }
 
             if (ciclo === '2025-2026') {
-                // Guardar en Alumno25_26
-                await db.alumno25_26.upsert({
-                    where: { matricula_unidad: { matricula, unidad: unidadNormalizada } },
-                    update: { nombre, grado, grupo },
-                    create: { matricula, unidad: unidadNormalizada, nombre, grado, grupo }
+                datosParaGuardar.push({
+                    matricula,
+                    unidad: unidadNormalizada,
+                    nombre,
+                    grado,
+                    grupo
                 });
             } else {
-                // Guardar en Alumno26_27
-                await db.alumno26_27.upsert({
-                    where: { matricula_unidad: { matricula, unidad: unidadNormalizada } },
-                    update: { nombre, grado, estatus, fechaEstatus, comentario },
-                    create: { matricula, unidad: unidadNormalizada, nombre, grado, estatus, fechaEstatus, comentario }
+                datosParaGuardar.push({
+                    matricula,
+                    unidad: unidadNormalizada,
+                    nombre,
+                    grado,
+                    estatus,
+                    fechaEstatus,
+                    comentario
+                });
+            }
+            procesados++;
+        }
+
+        onStep?.({ type: 'debug', message: `📝 Preparados ${procesados} registros para guardar` });
+
+        // Guardar en lote (más eficiente)
+        if (datosParaGuardar.length > 0) {
+            // Primero borrar registros existentes de este campus/ciclo
+            if (ciclo === '2025-2026') {
+                await db.alumno25_26.deleteMany({
+                    where: { unidad: unidadNormalizada }
+                });
+                await db.alumno25_26.createMany({
+                    data: datosParaGuardar,
+                    skipDuplicates: true
+                });
+            } else {
+                await db.alumno26_27.deleteMany({
+                    where: { unidad: unidadNormalizada }
+                });
+                await db.alumno26_27.createMany({
+                    data: datosParaGuardar,
+                    skipDuplicates: true
                 });
             }
         }
 
-        onStep?.({ type: 'saved', campus, ciclo, count: jsonData.length });
-        return jsonData.length;
+        onStep?.({ type: 'saved', campus, ciclo, count: datosParaGuardar.length });
+        return datosParaGuardar.length;
     } catch (error) {
         onStep?.({ type: 'error', message: `Error procesando ${campus} ${ciclo}: ${error}` });
         return 0;
@@ -972,17 +1004,27 @@ async function descargarConInterceptor(
             // FIX 3.3 & 3.4: Logging mejorado con valor de Estatus
             onStep?.({ type: 'debug', message: `✅ ${campus} = unit ID ${unitId} con Estatus ${estatusValue}` });
             
-            // NUEVA ESTRATEGIA: En producción, procesar directamente sin Excel
+            // NUEVA ESTRATEGIA: En producción, procesar JSON directamente en Node.js (no en navegador)
             const isCloudEnv = process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
             
             if (isCloudEnv) {
                 onStep?.({ type: 'debug', message: `📊 Procesando ${json.length} alumnos directamente en BD...` });
-                const guardados = await procesarYGuardarDatos(json, campus, ciclo, onStep);
-                if (guardados > 0) {
-                    onStep?.({ type: 'debug', message: `✅ ${guardados} alumnos guardados en BD` });
-                    return true;
+                try {
+                    // Procesar en Node.js (aquí tenemos acceso a db)
+                    const guardados = await procesarYGuardarDatos(json, campus, ciclo, onStep);
+                    if (guardados > 0) {
+                        onStep?.({ type: 'debug', message: `✅ ${guardados} alumnos guardados en BD` });
+                        // Crear archivo vacío para que el sistema sepa que se procesó
+                        await writeFile(filePath, Buffer.from('Procesado directamente en BD'));
+                        return true;
+                    } else {
+                        onStep?.({ type: 'debug', message: `⚠️ procesarYGuardarDatos retornó 0` });
+                        return false;
+                    }
+                } catch (error) {
+                    onStep?.({ type: 'debug', message: `❌ Error en procesarYGuardarDatos: ${error}` });
+                    return false;
                 }
-                return false;
             }
             
             // En desarrollo, seguir generando Excel
