@@ -1111,40 +1111,19 @@ export async function syncFromInnovat(
 
                     await screenshot(page, `en_reporte_${campus}_${cicloCorto(ciclo)}`, onStep);
 
-                    // ── 2c. Localizar botón GENERAR
+                    // ── 2c. Esperar que el botón GENERAR esté visible
+                    // Estrategia chatbot: NO verificar campo Unidad, Innovat ya lo tiene configurado internamente
+                    onStep?.({ type: 'debug', message: '⏳ Esperando que el botón GENERAR esté visible...' });
+                    
                     const botonGenerar = page.locator('a, button').filter({ hasText: /^generar$/i }).first();
-                    // Aumentamos el timeout a 25s, porque 2026-2027 a veces es muy lento creando la vista de Cumbres/Mitras
-                    const genVisible = await botonGenerar.isVisible().catch(() => false);
+                    const genVisible = await botonGenerar.isVisible({ timeout: 15000 }).catch(() => false);
+                    
                     if (!genVisible) {
                         onStep?.({ type: 'error', message: `Error en ${campus} ${ciclo}: Botón GENERAR no visible` });
                         continue;
                     }
-
-                    // ── 2d. Verificar que el campo Unidad ya está preseleccionado
-                    // Después de cambiar campus/ciclo, el campo "Unidad" ya viene con el valor correcto
-                    // NO intentar escribir en él porque borra el valor preseleccionado
-                    try {
-                        const seleccioneInput = page.locator([
-                            'md-autocomplete input[placeholder*="Seleccione"]',
-                            'md-autocomplete input[placeholder*="seleccione"]',
-                            'input[placeholder*="Seleccione"]',
-                            'md-autocomplete input',
-                        ].join(', ')).first();
-
-                        const inputVisible = await seleccioneInput.isVisible({ timeout: 3000 }).catch(() => false);
-                        const valorActual = await seleccioneInput.inputValue({ timeout: 1000 }).catch(() => '');
-                        onStep?.({ type: 'debug', message: `🔍 Campo Unidad: "${valorActual || '(vacío)'}"` });
-
-                        // El campo ya debe tener el valor correcto después de cambiar campus/ciclo
-                        // Si está vacío, es un problema pero NO intentar escribir porque borra el valor
-                        if (!valorActual || valorActual.trim() === '') {
-                            onStep?.({ type: 'debug', message: `⚠️ Campo Unidad vacío - puede ser un problema` });
-                        } else {
-                            onStep?.({ type: 'debug', message: `✅ Campo Unidad ya tiene valor: "${valorActual}"` });
-                        }
-                    } catch (e) {
-                        onStep?.({ type: 'debug', message: `⚠️ Error en campo Seleccione: ${e}` });
-                    }
+                    
+                    onStep?.({ type: 'debug', message: '✅ Botón GENERAR visible' });
 
                     // ── 2e. SELECCIONAR "AMBOS" EN BOTONES RADIALES (para ciclo 2026-2027) ───
                     // Según el usuario, para ciclo 2026-2027 hay que seleccionar "Ambos" en los botones radiales
