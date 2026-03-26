@@ -12,6 +12,7 @@ import { chromium, Browser, Page } from 'playwright';
 import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
 import * as XLSX from 'xlsx';
+import { db } from './db';
 
 // ─── Configuración ─────────────────────────────────────────────────────────
 const INNOVAT_URL = 'https://innovat1.mx/Gaia/login';
@@ -43,11 +44,126 @@ const UNIT_IDS: Record<string, Record<string, string>> = {
     },
 };
 
+// ─── Función de clasificación de alumnos ──────────────────────────────────
+function clasificarAlumno(estatus: string | null, comentario: string | null, esNuevoDesde26: boolean): string {
+    const s = (estatus || '').toLowerCase().trim();
+    const c = (comentario || '').toLowerCase().trim();
+
+    if (esNuevoDesde26) {
+        if (s.includes('inscrito') || s.includes('reinscrito') || s.includes('nuevo')) {
+            return 'Nuevo';
+        }
+        return 'Candidato';
+    }
+
+    if (s === 'reinscrito') {
+        return 'Reinscrito';
+    }
+
+    if (s.includes('baja') || s.includes('retirado')) {
+        if (c.includes('transferencia') || c.includes('plantel') || c.includes('unidad')) {
+            return 'Baja Transferencia';
+        }
+        return 'Baja Real';
+    }
+
+    return 'Por Reinscribir';
+}
+
+// ─── Función para procesar y guardar datos directamente ───────────────────
+async function procesarYGuardarDatos(
+    jsonData: any[],
+    campus: string,
+    ciclo: string,
+    onStep?: SyncCallback
+): Promise<number> {
+    try {
+        const esNuevoDesde26 = ciclo === '2026-2027';
+        const unidadNormalizada = campus.charAt(0).toUpperCase() + campus.slice(1).toLowerCase();
+        
+        onStep?.({ type: 'processing', campus, ciclo, count: jsonData.length });
+
+        // Normalizar nombres de columnas (case-insensitive)
+        const normalizeKey = (obj: any) => {
+            const normalized: any = {};
+            for (const key in obj) {
+                const lowerKey = key.toLowerCase();
+                if (lowerKey.includes('matrícula') || lowerKey.includes('matricula')) {
+                    normalized.matricula = obj[key];
+                } else if (lowerKey.includes('nombre')) {
+                    normalized.nombre = obj[key];
+                } else if (lowerKey.includes('unidad')) {
+                    normalized.unidad = obj[key];
+                } else if (lowerKey.includes('grado')) {
+                    normalized.grado = obj[key];
+                } else if (lowerKey.includes('grupo')) {
+                    normalized.grupo = obj[key];
+                } else if (lowerKey.includes('estatus') || lowerKey.includes('status')) {
+                    normalized.estatus = obj[key];
+                } else if (lowerKey.includes('fecha')) {
+                    normalized.fecha = obj[key];
+                } else if (lowerKey.includes('comentario')) {
+                    normalized.comentario = obj[key];
+                }
+            }
+            return normalized;
+        };
+
+        // Procesar cada alumno
+        for (const rawAlumno of jsonData) {
+            const alumno = normalizeKey(rawAlumno);
+            
+            if (!alumno.matricula || !alumno.nombre) continue;
+
+            const matricula = String(alumno.matricula).trim();
+            const nombre = String(alumno.nombre).trim();
+            const grado = String(alumno.grado || '').trim();
+            const grupo = String(alumno.grupo || '').trim();
+            const estatus = String(alumno.estatus || '').trim();
+            const comentario = String(alumno.comentario || '').trim();
+            
+            // Parsear fecha
+            let fechaEstatus: Date | null = null;
+            if (alumno.fecha) {
+                const fechaStr = String(alumno.fecha);
+                const parsed = new Date(fechaStr);
+                if (!isNaN(parsed.getTime())) {
+                    fechaEstatus = parsed;
+                }
+            }
+
+            if (ciclo === '2025-2026') {
+                // Guardar en Alumno25_26
+                await db.alumno25_26.upsert({
+                    where: { matricula_unidad: { matricula, unidad: unidadNormalizada } },
+                    update: { nombre, grado, grupo },
+                    create: { matricula, unidad: unidadNormalizada, nombre, grado, grupo }
+                });
+            } else {
+                // Guardar en Alumno26_27
+                await db.alumno26_27.upsert({
+                    where: { matricula_unidad: { matricula, unidad: unidadNormalizada } },
+                    update: { nombre, grado, estatus, fechaEstatus, comentario },
+                    create: { matricula, unidad: unidadNormalizada, nombre, grado, estatus, fechaEstatus, comentario }
+                });
+            }
+        }
+
+        onStep?.({ type: 'saved', campus, ciclo, count: jsonData.length });
+        return jsonData.length;
+    } catch (error) {
+        onStep?.({ type: 'error', message: `Error procesando ${campus} ${ciclo}: ${error}` });
+        return 0;
+    }
+}
+
 // ─── Tipos ─────────────────────────────────────────────────────────────────
 export type SyncStep =
     | { type: 'login' }
     | { type: 'campus'; campus: string; ciclo: string }
     | { type: 'downloaded'; campus: string; ciclo: string; path: string }
+    | { type: 'processing'; campus: string; ciclo: string; count: number }
+    | { type: 'saved'; campus: string; ciclo: string; count: number }
     | { type: 'error'; message: string }
     | { type: 'done'; files: string[] }
     | { type: 'debug'; message: string };
@@ -848,6 +964,21 @@ async function descargarConInterceptor(
 
             // FIX 3.3 & 3.4: Logging mejorado con valor de Estatus
             onStep?.({ type: 'debug', message: `✅ ${campus} = unit ID ${unitId} con Estatus ${estatusValue}` });
+            
+            // NUEVA ESTRATEGIA: En producción, procesar directamente sin Excel
+            const isCloudEnv = process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
+            
+            if (isCloudEnv) {
+                onStep?.({ type: 'debug', message: `📊 Procesando ${json.length} alumnos directamente en BD...` });
+                const guardados = await procesarYGuardarDatos(json, campus, ciclo, onStep);
+                if (guardados > 0) {
+                    onStep?.({ type: 'debug', message: `✅ ${guardados} alumnos guardados en BD` });
+                    return true;
+                }
+                return false;
+            }
+            
+            // En desarrollo, seguir generando Excel
             const XLSX = await import('xlsx');
             const wb = XLSX.utils.book_new();
             const ws = XLSX.utils.json_to_sheet(json);

@@ -71,8 +71,30 @@ export async function POST(request: NextRequest) {
                     }
                 );
 
-                // Si la descarga fue exitosa, disparar el procesamiento automático
-                if (archivosDescargados.length > 0) {
+                // NUEVA ESTRATEGIA: En producción, los datos ya están en BD
+                const isCloudEnv = process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
+                
+                if (isCloudEnv && archivosDescargados.length > 0) {
+                    // Los datos ya fueron guardados directamente en la BD por el agente
+                    send({ type: 'processing', message: '⚙️ Datos guardados en BD. Clasificando alumnos...' });
+                    
+                    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+                    try {
+                        const procRes = await fetch(`${baseUrl}/api/import`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'procesar' }),
+                        });
+                        if (procRes.ok) {
+                            send({ type: 'ready', message: '🚀 Sincronización completa. Dashboard actualizado automáticamente.' });
+                        } else {
+                            send({ type: 'ready', message: '✅ Datos guardados. Usa "Procesar Datos" en Config para clasificar.' });
+                        }
+                    } catch {
+                        send({ type: 'ready', message: '✅ Datos guardados. Usa "Procesar Datos" en Config para clasificar.' });
+                    }
+                } else if (archivosDescargados.length > 0) {
+                    // En desarrollo, seguir el flujo tradicional con Excel
                     send({ type: 'processing', message: '⚙️ Importando archivos descargados...' });
 
                     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
