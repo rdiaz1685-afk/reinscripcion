@@ -467,26 +467,31 @@ async function ejecutarFallbackDirecto(
             return false;
         }
         
-        // 4. Detectar índices de columnas dinámicamente (como en chatbot)
-        onStep?.({ type: 'debug', message: '🔍 Analizando encabezados de tabla...' });
-        const headers = await page.locator('table thead th').all();
-        const columnMap: Record<string, number> = {};
+        // 4. Usar índices fijos según el ciclo (ya limpiamos y marcamos solo los necesarios)
+        onStep?.({ type: 'debug', message: '🔍 Usando índices fijos de columnas...' });
         
-        for (let i = 0; i < headers.length; i++) {
-            const text = (await headers[i].innerText().catch(() => '')).toUpperCase().trim();
-            if (text.includes('MATR')) columnMap['matricula'] = i;
-            if (text.includes('NOMBR')) columnMap['nombre'] = i;
-            if (text.includes('UNIDAD')) columnMap['unidad'] = i;
-            if (text.includes('GRADO')) columnMap['grado'] = i;
-            if (text.includes('GRUPO')) columnMap['grupo'] = i;
-            if (text.includes('ESTATUS') || text.includes('STATUS')) columnMap['estatus'] = i;
-            if (text.includes('FECHA')) columnMap['fecha'] = i;
-            if (text.includes('COMENTARIO')) columnMap['comentario'] = i;
-        }
+        // Índices fijos después de limpiar checkboxes:
+        // 2025-2026: Unidad(0), Grado(1), Matrícula(2), Nombre(3), Grupo(4)
+        // 2026-2027: Unidad(0), Grado(1), Matrícula(2), Nombre(3), Estatus(4), Fecha(5), Comentario(6)
+        const columnMap: Record<string, number> = ciclo === '2025-2026' ? {
+            'unidad': 0,
+            'grado': 1,
+            'matricula': 2,
+            'nombre': 3,
+            'grupo': 4
+        } : {
+            'unidad': 0,
+            'grado': 1,
+            'matricula': 2,
+            'nombre': 3,
+            'estatus': 4,
+            'fecha': 5,
+            'comentario': 6
+        };
         
-        onStep?.({ type: 'debug', message: `📋 Columnas detectadas: ${JSON.stringify(columnMap)}` });
+        onStep?.({ type: 'debug', message: `📋 Índices de columnas: ${JSON.stringify(columnMap)}` });
         
-        // 5. Extraer todas las filas de la tabla (estrategia chatbot: buscar por contenido)
+        // 5. Extraer todas las filas usando índices fijos
         onStep?.({ type: 'debug', message: '📊 Extrayendo datos de la tabla...' });
         const rows = await page.locator('table tbody tr').all();
         const alumnos: Record<string, unknown>[] = [];
@@ -495,70 +500,16 @@ async function ejecutarFallbackDirecto(
             const cells = await row.locator('td').all();
             const cellTexts = await Promise.all(cells.map(c => c.innerText().catch(() => '')));
             
-            // ESTRATEGIA CHATBOT: Buscar por contenido, no por índice fijo
-            // Matrícula: Solo números, 4-8 dígitos
-            const matricula = cellTexts.find(t => /^\d{4,8}$/.test(t.trim()))?.trim();
-            
-            // Nombre: Texto largo que no sea solo números ni CURP
-            const nombre = cellTexts.find(t => 
-                t.trim().length > 5 && 
-                !/^\d+$/.test(t.trim()) &&
-                !t.includes('CURP')
-            )?.trim();
-            
-            // Grado: Número de 1-2 dígitos
-            const grado = cellTexts.find(t => /^[0-9]{1,2}$/.test(t.trim()))?.trim();
-            
-            // Grupo: 1-2 letras mayúsculas
-            const grupo = cellTexts.find(t => /^[A-Z]{1,2}$/i.test(t.trim()))?.trim();
-            
-            // Estatus: Palabras clave específicas (evitar capturar ciudad como "MONTERREY")
-            const estatus = cellTexts.find(t => {
-                const upper = t.trim().toUpperCase();
-                // Debe ser exactamente una de estas palabras clave, no contener ciudad
-                return (upper === 'REINSCRITO' || upper === 'BAJA' || 
-                       upper === 'NUEVO' || upper === 'ACTIVO' ||
-                       upper === 'INSCRITO' || upper === 'INSCRITA' ||
-                       upper.startsWith('BAJA ') || upper.startsWith('REINSCRIT'));
-            })?.trim();
-            
-            // Unidad: Usar campus como fallback
-            const unidad = cellTexts.find(t => {
-                const upper = t.trim().toUpperCase();
-                return upper.includes('MITRAS') || upper.includes('CUMBRES') || 
-                       upper.includes('NORTE') || upper.includes('ANAHUAC') || 
-                       upper.includes('DOMINIO');
-            })?.trim() || campus;
-            
-            // Comentario: Texto largo que contenga palabras clave de comentarios
-            const comentario = cellTexts.find(t => {
-                const upper = t.trim().toUpperCase();
-                const len = t.trim().length;
-                // Buscar texto que contenga palabras clave de comentarios o sea texto largo
-                return len > 10 && (
-                    upper.includes('TRANSFERENCIA') || 
-                    upper.includes('CAMBIO') ||
-                    upper.includes('MOTIVO') ||
-                    upper.includes('OBSERV') ||
-                    (len > 20 && !upper.includes('MONTERREY') && !upper.includes('LEON'))
-                );
-            })?.trim() || '';
-            
-            // Fecha: Buscar formato de fecha (DD/MM/YYYY, DD-MMM, etc.)
-            const fechaEstatus = cellTexts.find(t => {
-                const txt = t.trim();
-                return /\d{1,2}[\/-]\w{3}/.test(txt) || /\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/.test(txt);
-            })?.trim() || '';
-            
+            // Extraer usando índices fijos
             const alumno: Record<string, unknown> = {
-                'Matricula': matricula || '',
-                'Nombre': nombre || '',
-                'Unidad': unidad,
-                'Grado': grado || '',
-                'Grupo': grupo || '',
-                'Estatus': estatus || '',
-                'Fecha estatus': fechaEstatus,
-                'Comentario estatus': comentario
+                'Matricula': cellTexts[columnMap['matricula']]?.trim() || '',
+                'Nombre': cellTexts[columnMap['nombre']]?.trim() || '',
+                'Unidad': cellTexts[columnMap['unidad']]?.trim() || campus,
+                'Grado': cellTexts[columnMap['grado']]?.trim() || '',
+                'Grupo': cellTexts[columnMap['grupo']]?.trim() || '',
+                'Estatus': cellTexts[columnMap['estatus']]?.trim() || '',
+                'Fecha estatus': cellTexts[columnMap['fecha']]?.trim() || '',
+                'Comentario estatus': cellTexts[columnMap['comentario']]?.trim() || ''
             };
             
             // Solo agregar si tiene matrícula y nombre
@@ -1263,16 +1214,41 @@ export async function syncFromInnovat(
                         }
                     }
 
-                    // ── 2f. ASEGURAR CHECKBOXES DE CAMPOS NECESARIOS (TÉCNICA MITRAS) ───────────────────
+                    // ── 2f. LIMPIAR Y CONFIGURAR CHECKBOXES DE CAMPOS ───────────────────
                     try {
-                        onStep?.({ type: 'debug', message: '📋 Configurando campos necesarios (técnica robusta)...' });
+                        onStep?.({ type: 'debug', message: '🧹 Limpiando todos los checkboxes...' });
+                        
+                        // PASO 1: Desmarcar TODOS los checkboxes primero
+                        await page.evaluate(() => {
+                            const allCheckboxes = Array.from(document.querySelectorAll('input[type="checkbox"]'));
+                            allCheckboxes.forEach(cb => {
+                                if (cb.checked) {
+                                    const label = cb.closest('label') || document.querySelector(`label[for="${cb.id}"]`);
+                                    if (label) {
+                                        (label as HTMLElement).click();
+                                    } else {
+                                        cb.checked = false;
+                                    }
+                                }
+                            });
+                        });
+                        await page.waitForTimeout(1000);
+                        
+                        onStep?.({ type: 'debug', message: '✅ Checkboxes limpiados' });
+                        onStep?.({ type: 'debug', message: '📋 Marcando solo campos necesarios...' });
 
-                        const camposNecesarios = [
-                            { campo: 'Matrícula', tab: 'Alumno' },
-                            { campo: 'Nombre corto', tab: 'Alumno' },
+                        // PASO 2: Definir campos según ciclo
+                        const camposNecesarios = ciclo === '2025-2026' ? [
                             { campo: 'Unidad', tab: 'Administrativos' },
                             { campo: 'Grado', tab: 'Administrativos' },
+                            { campo: 'Matrícula', tab: 'Alumno' },
+                            { campo: 'Nombre corto', tab: 'Alumno' },
                             { campo: 'Grupo', tab: 'Administrativos' },
+                        ] : [
+                            { campo: 'Unidad', tab: 'Administrativos' },
+                            { campo: 'Grado', tab: 'Administrativos' },
+                            { campo: 'Matrícula', tab: 'Alumno' },
+                            { campo: 'Nombre corto', tab: 'Alumno' },
                             { campo: 'Estatus', tab: 'Administrativos' },
                             { campo: 'Fecha estatus', tab: 'Administrativos' },
                             { campo: 'Comentario estatus', tab: 'Administrativos' },
