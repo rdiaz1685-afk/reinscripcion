@@ -428,8 +428,8 @@ let gralalumnosReqBody: string | null = null;
 let gralalumnosReqUrl: string | null = null;
 let gralalumnosReqHeaders: Record<string, string> = {};
 
-// ─── Fallback Directo (Producción) - Estrategia Chatbot ────────────────────────────────────────
-// Extraer datos directamente de la tabla HTML después de hacer click en GENERAR
+// ─── Fetch Directo a API (Producción) ────────────────────────────────────────
+// Hacer fetch directo a la API de Innovat que devuelve JSON y guardarlo en BD
 async function ejecutarFallbackDirecto(
     page: Page,
     botonGenerar: ReturnType<Page['locator']>,
@@ -440,148 +440,111 @@ async function ejecutarFallbackDirecto(
     unitIdCapturado?: string | null
 ): Promise<boolean> {
     try {
-        onStep?.({ type: 'debug', message: '🔄 Extrayendo datos de tabla HTML (estrategia chatbot)' });
+        onStep?.({ type: 'debug', message: '🔄 Fetch directo a API de Innovat para obtener JSON' });
         
-        // 1. Hacer click en GENERAR y esperar que la tabla se cargue
-        onStep?.({ type: 'debug', message: '🖱️ Haciendo click en GENERAR...' });
-        await botonGenerar.click({ force: true });
-        
-        // 2. Esperar activamente a que la tabla aparezca (hasta 20 segundos)
-        onStep?.({ type: 'debug', message: '⏳ Esperando que la tabla se cargue...' });
-        try {
-            await page.waitForSelector('table tbody tr', { timeout: 20000, state: 'visible' });
-            onStep?.({ type: 'debug', message: '✅ Tabla detectada' });
-        } catch (e) {
-            onStep?.({ type: 'debug', message: '⚠️ Timeout esperando tabla - intentando de todos modos...' });
-        }
-        
-        // Esperar 2 segundos adicionales para que la tabla termine de cargar completamente
-        await page.waitForTimeout(2000);
-        
-        // 3. Verificar que la tabla existe
-        const tableCount = await page.locator('table tbody tr').count();
-        onStep?.({ type: 'debug', message: `📊 Filas detectadas en tabla: ${tableCount}` });
-        
-        if (tableCount === 0) {
-            onStep?.({ type: 'debug', message: '❌ No se encontró tabla con datos' });
+        // Obtener el unit ID del campus y ciclo
+        const unitId = UNIT_IDS[ciclo]?.[campus];
+        if (!unitId) {
+            onStep?.({ type: 'debug', message: `❌ No se encontró unit ID para ${campus} ${ciclo}` });
             return false;
         }
         
-        // 4. Detectar columnas dinámicamente por contenido de headers
-        onStep?.({ type: 'debug', message: '🔍 Detectando estructura de tabla por headers...' });
+        onStep?.({ type: 'debug', message: `� Usando unit ID ${unitId} para ${campus} ${ciclo}` });
         
-        const headers = await page.locator('table thead th').all();
-        const columnMap: Record<string, number> = {};
-        const headerTexts: string[] = [];
+        // API URL de Innovat
+        const apiUrl = 'https://innovat1.mx/Gaia/32.3.1/api/gralalumnos';
         
-        for (let i = 0; i < headers.length; i++) {
-            const text = (await headers[i].innerText().catch(() => '')).toUpperCase().trim();
-            headerTexts.push(`[${i}]${text}`);
-            
-            if (text.includes('UNIDAD') || text.includes('CAMPUS')) {
-                columnMap['unidad'] = i;
-            } else if (text.includes('GRADO') || text.includes('NIVEL')) {
-                columnMap['grado'] = i;
-            } else if (text.includes('GRUPO') || text.includes('SECC')) {
-                columnMap['grupo'] = i;
-            } else if (text.includes('MATR') || text.includes('CLAVE')) {
-                columnMap['matricula'] = i;
-            } else if (text.includes('NOMBRE') || text.includes('ALUMNO')) {
-                columnMap['nombre'] = i;
-            } else if (text.includes('ESTATUS') || text.includes('STATUS')) {
-                columnMap['estatus'] = i;
-            } else if (text.includes('FECHA') && text.includes('ESTATUS')) {
-                columnMap['fecha'] = i;
-            } else if (text.includes('COMENTARIO')) {
-                columnMap['comentario'] = i;
-            }
-        }
+        // Definir campos según el ciclo
+        const campos = ciclo === '2025-2026' ? [
+            { Alias: 'Unidad', Codigo: 'A16', Seccion: 1, Columna: 1, Selected: true },
+            { Alias: 'Grado', Codigo: 'A8', Seccion: 1, Columna: 2, Selected: true },
+            { Alias: 'Grupo', Codigo: 'A9', Seccion: 1, Columna: 3, Selected: true },
+            { Alias: 'Matrícula', Codigo: 'A1', Seccion: 1, Columna: 4, Selected: true },
+            { Alias: 'Nombre corto', Codigo: 'A5', Seccion: 1, Columna: 5, Selected: true }
+        ] : [
+            { Alias: 'Unidad', Codigo: 'A16', Seccion: 1, Columna: 1, Selected: true },
+            { Alias: 'Grado', Codigo: 'A8', Seccion: 1, Columna: 2, Selected: true },
+            { Alias: 'Estatus', Codigo: 'A10', Seccion: 1, Columna: 3, Selected: true },
+            { Alias: 'Fecha estatus', Codigo: 'A11', Seccion: 1, Columna: 4, Selected: true },
+            { Alias: 'Comentario estatus', Codigo: 'A12', Seccion: 1, Columna: 5, Selected: true },
+            { Alias: 'Matrícula', Codigo: 'A1', Seccion: 1, Columna: 6, Selected: true },
+            { Alias: 'Nombre corto', Codigo: 'A5', Seccion: 1, Columna: 7, Selected: true }
+        ];
         
-        onStep?.({ type: 'debug', message: `📋 Headers: ${headerTexts.join(', ')}` });
-        onStep?.({ type: 'debug', message: `📋 Columnas detectadas: ${JSON.stringify(columnMap)}` });
+        // Probar múltiples valores de Estatus para 2026-2027
+        const estatusValues = ciclo === '2026-2027' ? [-1, 1] : [1];
         
-        // 5. Extraer todas las filas - usar evaluate para obtener texto real de cada columna
-        onStep?.({ type: 'debug', message: '📊 Extrayendo datos de la tabla usando evaluate...' });
-        
-        // Capturar logs de consola
-        page.on('console', msg => {
-            if (msg.text().includes('[DEBUG]')) {
-                onStep?.({ type: 'debug', message: `🖥️ Browser: ${msg.text()}` });
-            }
-        });
-        
-        const alumnos = await page.evaluate((colMap) => {
-            const rows = Array.from(document.querySelectorAll('table tbody tr'));
-            const result: any[] = [];
-            let rowsProcessed = 0;
-            
-            for (const row of rows) {
-                rowsProcessed++;
-                const cells = Array.from(row.querySelectorAll('td'));
-                
-                // Extraer texto de cada celda
-                const matricula = cells[colMap.matricula]?.innerText?.trim() || '';
-                const nombre = cells[colMap.nombre]?.innerText?.trim() || '';
-                const unidad = cells[colMap.unidad]?.innerText?.trim() || '';
-                const grado = cells[colMap.grado]?.innerText?.trim() || '';
-                const grupo = cells[colMap.grupo]?.innerText?.trim() || '';
-                const estatus = cells[colMap.estatus]?.innerText?.trim() || '';
-                const fecha = cells[colMap.fecha]?.innerText?.trim() || '';
-                const comentario = cells[colMap.comentario]?.innerText?.trim() || '';
-                
-                // Log primera fila
-                if (rowsProcessed === 1) {
-                    console.log('[DEBUG] Primera fila:', { matricula, nombre, unidad, grado, grupo, estatus, fecha, comentario });
-                    console.log('[DEBUG] Celdas:', cells.map((c, i) => `[${i}]${c.innerText?.substring(0, 20)}`).slice(0, 15).join(', '));
-                }
-                
-                // Solo agregar si tiene matrícula y nombre
-                if (matricula && nombre) {
-                    result.push({
-                        'Matricula': matricula,
-                        'Nombre': nombre,
-                        'Unidad': unidad,
-                        'Grado': grado,
-                        'Grupo': grupo,
-                        'Estatus': estatus,
-                        'Fecha estatus': fecha,
-                        'Comentario estatus': comentario
-                    });
-                }
+        for (const estatusValue of estatusValues) {
+            if (estatusValues.length > 1) {
+                onStep?.({ type: 'debug', message: `🔍 Probando con Estatus: ${estatusValue}...` });
             }
             
-            return result;
-        }, columnMap);
-        
-        onStep?.({ type: 'debug', message: `✅ ${alumnos.length} alumnos extraídos de la tabla` });
-        
-        if (alumnos.length === 0) {
-            onStep?.({ type: 'debug', message: '⚠️ No se encontraron alumnos en la tabla' });
-            return false;
-        }
-        
-        onStep?.({ type: 'debug', message: `📊 Muestra: ${JSON.stringify(alumnos[0]).substring(0, 200)}` });
-        
-        // 6. Procesar y guardar en BD
-        try {
-            onStep?.({ type: 'debug', message: `🔄 Guardando ${alumnos.length} alumnos en BD...` });
-            const guardados = await procesarYGuardarDatos(alumnos, campus, ciclo, onStep);
+            const requestBody = {
+                Filtro: 'Unidad',
+                Ids: [unitId],
+                Estatus: estatusValue,
+                OptHermanos: 'TODOS',
+                Campos: campos,
+                Tipo: 'json',
+                Hermanos: 'TODOS'
+            };
+            
+            // Hacer fetch desde el contexto del navegador (tiene las cookies de sesión)
+            const result = await page.evaluate(
+                async ({ url, body }: { url: string; body: string }) => {
+                    try {
+                        const res = await fetch(url, {
+                            method: 'PUT',
+                            credentials: 'include',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json, text/plain, */*'
+                            },
+                            body
+                        });
+                        const text = await res.text();
+                        return { status: res.status, text };
+                    } catch (e) {
+                        return { status: -1, text: String(e) };
+                    }
+                },
+                { url: apiUrl, body: JSON.stringify(requestBody) }
+            );
+            
+            if (result.status !== 200 || result.text.length < 5) {
+                onStep?.({ type: 'debug', message: `  Estatus ${estatusValue}: HTTP ${result.status}` });
+                continue;
+            }
+            
+            let jsonData: Record<string, unknown>[];
+            try {
+                jsonData = JSON.parse(result.text);
+            } catch {
+                onStep?.({ type: 'debug', message: `  Estatus ${estatusValue}: respuesta no es JSON válido` });
+                continue;
+            }
+            
+            if (!Array.isArray(jsonData) || jsonData.length === 0) {
+                onStep?.({ type: 'debug', message: `  Estatus ${estatusValue}: respuesta vacía` });
+                continue;
+            }
+            
+            onStep?.({ type: 'debug', message: `✅ ${jsonData.length} alumnos obtenidos de la API` });
+            
+            // Guardar directamente en BD
+            const guardados = await procesarYGuardarDatos(jsonData, campus, ciclo, onStep);
             
             if (guardados > 0) {
                 onStep?.({ type: 'debug', message: `✅ ${guardados} alumnos guardados en BD` });
-                await writeFile(filePath, Buffer.from('Procesado directamente en BD'));
+                await writeFile(filePath, Buffer.from('Procesado directamente en BD desde API'));
                 return true;
-            } else {
-                onStep?.({ type: 'debug', message: `⚠️ No se guardaron registros` });
-                return false;
             }
-        } catch (error) {
-            onStep?.({ type: 'debug', message: `❌ Error guardando: ${error}` });
-            onStep?.({ type: 'debug', message: `❌ Stack: ${error instanceof Error ? error.stack : 'N/A'}` });
-            return false;
         }
+        
+        onStep?.({ type: 'debug', message: `❌ No se encontraron datos para ${campus}` });
+        return false;
     } catch (error) {
-        onStep?.({ type: 'debug', message: `❌ Error crítico en fallback: ${error}` });
+        onStep?.({ type: 'debug', message: `❌ Error en fetch directo a API: ${error}` });
         onStep?.({ type: 'debug', message: `❌ Stack: ${error instanceof Error ? error.stack : 'N/A'}` });
         return false;
     }
@@ -1367,11 +1330,11 @@ export async function syncFromInnovat(
                         await page.waitForTimeout(tiempoEsperaFormulario);
                     }
 
-                    // ── 2e. Extraer datos de tabla HTML (estrategia chatbot)
+                    // ── 2e. Descargar Excel usando interceptor
                     const fileName = campusNombreArchivo(campus, ciclo);
                     const filePath = join(uploadDir, fileName);
 
-                    const descargado = await ejecutarFallbackDirecto(page, botonGenerar, filePath, campus, ciclo, onStep, null);
+                    const descargado = await descargarConInterceptor(page, botonGenerar, filePath, campus, ciclo, onStep, null);
 
                     if (descargado) {
                         downloadedFiles.push(fileName);
