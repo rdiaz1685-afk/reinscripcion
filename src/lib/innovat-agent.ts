@@ -467,43 +467,38 @@ async function ejecutarFallbackDirecto(
             return false;
         }
         
-        // 4. Detectar offset de columnas adicionales (checkboxes, botones, etc.)
-        onStep?.({ type: 'debug', message: '🔍 Detectando estructura de tabla...' });
+        // 4. Detectar columnas dinámicamente por contenido de headers
+        onStep?.({ type: 'debug', message: '🔍 Detectando estructura de tabla por headers...' });
         
-        // Contar cuántas columnas hay antes de nuestros datos
         const headers = await page.locator('table thead th').all();
-        let offset = 0;
+        const columnMap: Record<string, number> = {};
+        const headerTexts: string[] = [];
         
         for (let i = 0; i < headers.length; i++) {
             const text = (await headers[i].innerText().catch(() => '')).toUpperCase().trim();
-            // Buscar la primera columna de nuestros datos (Unidad, Grado o Matrícula)
-            if (text.includes('UNIDAD') || text.includes('GRADO') || text.includes('MATR')) {
-                offset = i;
-                onStep?.({ type: 'debug', message: `� Primera columna de datos encontrada en índice ${offset}` });
-                break;
+            headerTexts.push(`[${i}]${text}`);
+            
+            if (text.includes('UNIDAD') || text.includes('CAMPUS')) {
+                columnMap['unidad'] = i;
+            } else if (text.includes('GRADO') || text.includes('NIVEL')) {
+                columnMap['grado'] = i;
+            } else if (text.includes('GRUPO') || text.includes('SECC')) {
+                columnMap['grupo'] = i;
+            } else if (text.includes('MATR') || text.includes('CLAVE')) {
+                columnMap['matricula'] = i;
+            } else if (text.includes('NOMBRE') || text.includes('ALUMNO')) {
+                columnMap['nombre'] = i;
+            } else if (text.includes('ESTATUS') || text.includes('STATUS')) {
+                columnMap['estatus'] = i;
+            } else if (text.includes('FECHA') && text.includes('ESTATUS')) {
+                columnMap['fecha'] = i;
+            } else if (text.includes('COMENTARIO')) {
+                columnMap['comentario'] = i;
             }
         }
         
-        // Índices relativos + offset (según orden real de checkboxes marcados)
-        // 2025-2026: Unidad(0), Grado(1), Grupo(2), Matrícula(3), Nombre(4)
-        // 2026-2027: Unidad(0), Grado(1), Estatus(2), Fecha Estatus(3), Comentario Estatus(4), Matrícula(5), Nombre(6)
-        const columnMap: Record<string, number> = ciclo === '2025-2026' ? {
-            'unidad': offset + 0,
-            'grado': offset + 1,
-            'grupo': offset + 2,
-            'matricula': offset + 3,
-            'nombre': offset + 4
-        } : {
-            'unidad': offset + 0,
-            'grado': offset + 1,
-            'estatus': offset + 2,
-            'fecha': offset + 3,
-            'comentario': offset + 4,
-            'matricula': offset + 5,
-            'nombre': offset + 6
-        };
-        
-        onStep?.({ type: 'debug', message: `📋 Índices de columnas (con offset ${offset}): ${JSON.stringify(columnMap)}` });
+        onStep?.({ type: 'debug', message: `📋 Headers: ${headerTexts.join(', ')}` });
+        onStep?.({ type: 'debug', message: `📋 Columnas detectadas: ${JSON.stringify(columnMap)}` });
         
         // 5. Extraer todas las filas usando índices fijos
         onStep?.({ type: 'debug', message: '📊 Extrayendo datos de la tabla...' });
