@@ -581,8 +581,18 @@ async function descargarConInterceptor(
                 gralalumnosReqHeaders = request.headers();
                 const body = request.postData();
                 if (body) {
-                    gralalumnosReqBody = body;
-                    onStep?.({ type: 'debug', message: `📤 Request capturado: ${body.substring(0, 150)}` });
+                    // FIX: Innovat requiere Estatus como número, no string
+                    // AngularJS a veces serializa el radio button como "-1" (string)
+                    try {
+                        const parsed = JSON.parse(body);
+                        if (typeof parsed.Estatus === 'string') {
+                            parsed.Estatus = parseInt(parsed.Estatus, 10);
+                        }
+                        gralalumnosReqBody = JSON.stringify(parsed);
+                    } catch {
+                        gralalumnosReqBody = body;
+                    }
+                    onStep?.({ type: 'debug', message: `📤 Request capturado: ${gralalumnosReqBody!.substring(0, 150)}` });
                 }
             } catch { }
         };
@@ -1005,6 +1015,22 @@ export async function syncFromInnovat(
             // No bloqueamos 'stylesheet' porque AngularJS podría depender de elementos visibles (layout) para clics
             if (['image', 'media', 'font'].includes(type) || request.url().includes('google-analytics')) {
                 route.abort();
+            } else if (request.url().includes('gralalumnos') && request.method() === 'PUT') {
+                // FIX CRÍTICO: Innovat requiere Estatus como número entero.
+                // AngularJS serializa el valor del radio button "Ambos" como string "-1".
+                // Lo corregimos antes de que el request llegue al servidor.
+                try {
+                    const body = request.postData();
+                    if (body) {
+                        const parsed = JSON.parse(body);
+                        if (typeof parsed.Estatus === 'string') {
+                            parsed.Estatus = parseInt(parsed.Estatus, 10);
+                            route.continue({ postData: JSON.stringify(parsed) });
+                            return;
+                        }
+                    }
+                } catch { }
+                route.continue();
             } else {
                 route.continue();
             }
