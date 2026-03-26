@@ -261,172 +261,69 @@ function campusNombreArchivo(campus: string, ciclo: string): string {
     return `${campus}_${cicloCorto(ciclo)}.xlsx`;
 }
 
-// ─── Cambiar Campus y Ciclo desde el selector del header ───────────────────
-// El header muestra "CUMBRES 2025-2026 ▼" — hay que hacer click EXACTAMENTE
-// en ese botón para abrir el dropdown con todas las combinaciones campus+ciclo
+// ─── Cambiar Campus y Ciclo (Estrategia Chatbot) ───────────────────────────
 async function cambiarCampusCiclo(
     page: Page,
     campus: string,
     ciclo: string,
     onStep?: SyncCallback
 ): Promise<void> {
-    const cicloC = cicloCorto(ciclo); // "25-26"
+    onStep?.({ type: 'debug', message: `🔄 Seleccionando campus: ${campus} | Ciclo: ${ciclo}` });
 
-    // ── Leer solo el texto del botón del header (no el dropdown expandido)
-    // Estrategia: buscar el elemento que contenga EXACTAMENTE "CAMPUS CICLO" sin hijos adicionales
-    // El botón del header es un elemento específico visible en la barra superior
-    // Su texto es algo como "CUMBRES 2025-2026" o "CUMBRES 25-26"
+    // Cerrar dropdowns activos
+    await page.evaluate(() => {
+        const xList = Array.from(document.querySelectorAll('span, a')).filter(el => el.textContent?.trim() === 'X') as HTMLElement[];
+        xList.forEach(x => x.click());
+    });
+    await page.waitForTimeout(400);
 
-    // Selector específico: el dropdown trigger del header
-    // En AngularJS/UIKit suele ser un <a> o <span> con ng-click dentro de un <div class="...dropdown...">
-    const dropdownTrigger = page.locator([
-        'a[ng-click*="Unidad"], a[ng-click*="Campus"], a[ng-click*="ciclo"]',
-        '.uk-navbar-nav a:has-text("2025"), .uk-navbar-nav a:has-text("2026")',
-        'a.dropdown-toggle:has-text("CUMBRES"), a.dropdown-toggle:has-text("DOMINIO")',
-        'a.dropdown-toggle:has-text("MITRAS"), a.dropdown-toggle:has-text("NORTE")',
-        // Selector de texto: el botón visible del header con el año
-        'nav a:has-text("2025-2026"), nav a:has-text("2026-2027")',
-        // Buscar dentro del navbar específicamente
-        '.md-navbar a:has-text("2025"), .md-navbar a:has-text("2026")',
-    ].join(', ')).first();
-
-    // Fallback: el botón más específico que solo contiene campus+año (texto corto)
-    const dropdownFallback = page.locator('a, button, span')
-        .filter({ hasText: /(?:CUMBRES|DOMINIO|MITRAS|NORTE|AN[AÁ]HUAC)\s+\d{4}/i })
-        // Excluir elementos con demasiado texto (los que contienen todo el navbar)
-        .first();
-
-    onStep?.({ type: 'debug', message: `🔄 Buscando selector de campus/ciclo...` });
-
-    // Intentar leer el texto del trigger para verificar campus actual
-    let textoHeader = '';
-    try {
-        textoHeader = await dropdownTrigger.textContent({ timeout: 2000 }) ?? '';
-    } catch {
-        try {
-            textoHeader = await dropdownFallback.textContent({ timeout: 2000 }) ?? '';
-        } catch { }
-    }
-    onStep?.({ type: 'debug', message: `📍 Texto del selector: "${textoHeader.trim().substring(0, 50)}"` });
-
-    // ── Hacer click en el trigger del dropdown
-    let clicExitoso = false;
-    try {
-        await dropdownTrigger.click({ timeout: 4000 });
-        clicExitoso = true;
-    } catch {
-        try {
-            await dropdownFallback.click({ timeout: 4000 });
-            clicExitoso = true;
-        } catch {
-            onStep?.({ type: 'debug', message: '⚠️ No se encontró el trigger del dropdown (reintentando...)' });
-            // Forzar navegación a un estado limpio
-            await page.goto('https://innovat1.mx/Gaia/32.2.2/#/Inicio', { waitUntil: 'domcontentloaded' }).catch(() => { });
-            await page.waitForTimeout(2000);
-            await dropdownFallback.click({ timeout: 4000 }).then(() => clicExitoso = true).catch(() => { });
+    // Buscar el trigger del campus actual en la navbar
+    const trigger = page.locator('.uk-navbar-nav, .header').locator('a, span').filter({ hasText: /NORTE|CUMBRES|MITRAS|ANAHUAC|DOMINIO/i }).first();
+    
+    if (await trigger.isVisible()) {
+        const triggerText = (await trigger.innerText()).toUpperCase();
+        if (triggerText.includes(campus.toUpperCase()) && triggerText.includes(ciclo)) {
+            onStep?.({ type: 'debug', message: `✅ Campus ${campus} ${ciclo} ya está activo` });
+            return;
         }
-    }
 
-    if (!clicExitoso) return;
+        onStep?.({ type: 'debug', message: `📍 Campus activo: ${triggerText}, cambiando a ${campus}...` });
+        await trigger.click({ force: true });
+        await page.waitForTimeout(600);
 
-    await page.waitForTimeout(800);
-    onStep?.({ type: 'debug', message: '✅ Dropdown de campus abierto' });
-    await screenshot(page, `dropdown_${campus}_${cicloC}`, onStep);
+        const clicked = await page.evaluate(({ campusN, cicloT }: { campusN: string; cicloT: string }) => {
+            const opts = Array.from(document.querySelectorAll('.uk-dropdown a, .uk-nav a, .uk-dropdown li a')) as HTMLElement[];
+            
+            let target = opts.find(o => {
+                const txt = o.innerText?.trim().toUpperCase();
+                return txt?.includes(campusN.toUpperCase()) && txt?.includes(cicloT);
+            });
 
-    // ── Leer y mostrar TODAS las opciones del dropdown para debug
-    const opciones = page.locator('ul li, li[ng-repeat], .uk-dropdown li, [role="option"]');
-    const count = await opciones.count().catch(() => 0);
-    onStep?.({ type: 'debug', message: `📋 ${count} opciones en dropdown:` });
-    for (let i = 0; i < Math.min(count, 20); i++) {
-        const t = (await opciones.nth(i).textContent().catch(() => ''))?.trim();
-        onStep?.({ type: 'debug', message: `  [${i}] "${t}"` });
-    }
-
-    // Función para normalizar acentos en la comparación
-    const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
-
-    // ── Seleccionar la opción que contenga CAMPUS + CICLO
-    // IMPORTANTE: Ignorar opciones con texto largo (son contenedores con todos los campus juntos)
-    const MAX_LONGITUD_OPCION = 60;
-    let seleccionado = false;
-    let seleccionadoConCiclo = false; // true si ya elegimos combo campus+ciclo juntos
-
-    // Estrategia 1: Combo exacto "CAMPUS CICLO" en un texto corto (incluyendo normalización de acentos)
-    for (let i = 0; i < count; i++) {
-        const raw = (await opciones.nth(i).textContent().catch(() => '')) ?? '';
-        const texto = norm(raw);
-        if (texto.length > MAX_LONGITUD_OPCION) continue;
-        const campusNorm = norm(campus); // ANAHUAC (sin acento)
-        const tieneCampus = texto.includes(campusNorm);
-        const tieneCiclo = texto.includes(ciclo.toUpperCase()) || texto.includes(cicloC.toUpperCase());
-        if (tieneCampus && tieneCiclo) {
-            try {
-                await opciones.nth(i).click({ noWaitAfter: true, force: true, timeout: 5000 });
-            } catch (e) {
-                onStep?.({ type: 'debug', message: `⚠️ Click suave en combo campus/ciclo: ${e}` });
+            if (!target) {
+                target = opts.find(o => o.innerText?.trim().toUpperCase().includes(campusN.toUpperCase()));
             }
-            await page.waitForTimeout(2500);
-            onStep?.({ type: 'debug', message: `✅ Seleccionado: "${raw.trim()}" (idx ${i})` });
-            seleccionado = true;
-            seleccionadoConCiclo = true;
-            break;
-        }
-    }
 
-    // Estrategia 2: Solo campus (dropdown de dos niveles) — fallback
-    if (!seleccionado) {
-        for (let i = 0; i < count; i++) {
-            const raw = (await opciones.nth(i).textContent().catch(() => '')) ?? '';
-            const texto = norm(raw);
-            if (texto.length > MAX_LONGITUD_OPCION && texto.includes(norm(campus))) {
-                try {
-                    await opciones.nth(i).click({ noWaitAfter: true, force: true, timeout: 5000 });
-                } catch (e) {
-                    onStep?.({ type: 'debug', message: `⚠️ Click suave en fallback campus: ${e}` });
-                }
-                await page.waitForTimeout(2000);
-                onStep?.({ type: 'debug', message: `✅ Campus (fallback): "${raw.trim()}"` });
-                seleccionado = true;
-                break;
+            if (target) {
+                target.click();
+                return true;
             }
-        }
-    }
+            return false;
+        }, { campusN: campus, cicloT: ciclo });
 
-    if (!seleccionado) {
-        onStep?.({ type: 'debug', message: `⚠️ No se encontró opción para ${campus} ${ciclo}` });
-        await page.keyboard.press('Escape');
-        return;
-    }
-
-    await screenshot(page, `contexto_${campus}_${cicloC}`, onStep);
-
-    // Si NO seleccionamos la combo completa (solo campus), buscar ciclo en segundo nivel
-    if (!seleccionadoConCiclo) {
-        await page.waitForTimeout(500);
-        const opcionesCiclo = page.locator('ul li, li[ng-repeat], .uk-dropdown li, [role="option"]');
-        const countC = await opcionesCiclo.count().catch(() => 0);
-        if (countC > 0) {
-            for (let i = 0; i < countC; i++) {
-                const raw = await opcionesCiclo.nth(i).textContent().catch(() => '');
-                const texto = norm(raw ?? '');
-                if (texto.length < MAX_LONGITUD_OPCION && (texto.includes(ciclo) || texto.includes(cicloC))) {
-                    try {
-                        await opcionesCiclo.nth(i).click({ noWaitAfter: true, force: true, timeout: 5000 });
-                    } catch (e) {
-                        onStep?.({ type: 'debug', message: `⚠️ Click suave en ciclo 2º nivel: ${e}` });
-                    }
-                    await page.waitForTimeout(2500);
-                    onStep?.({ type: 'debug', message: `✅ Ciclo ${cicloC} seleccionado en 2º nivel` });
-                    break;
-                }
+        if (clicked) {
+            onStep?.({ type: 'debug', message: `✅ Campus seleccionado exitosamente` });
+            await page.waitForTimeout(4000);
+            
+            // Forzar recarga si estamos en Inicio
+            const currentUrl = page.url();
+            if (currentUrl.includes('#/Inicio') || currentUrl.includes('Inicio') || currentUrl.includes('Padres')) {
+                await page.goto(currentUrl).catch(() => {});
+                await page.waitForTimeout(1000);
             }
+        } else {
+            await page.waitForTimeout(400);
         }
     }
-
-    // Verificar resultado
-    await page.waitForTimeout(500);
-    const headerFinal = await dropdownFallback.textContent({ timeout: 2000 }).catch(() => '???');
-    onStep?.({ type: 'debug', message: `📍 Header después del cambio: "${headerFinal?.trim().substring(0, 50)}"` });
 }
 
 // ─── Navegar a General de Alumnos ──────────────────────────────────────────
