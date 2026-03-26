@@ -68,25 +68,41 @@ function clasificarAlumno(estatus: string | null, comentario: string | null, esN
   const s = (estatus || '').toLowerCase().trim();
   const c = (comentario || '').toLowerCase().trim();
 
+  // Alumnos nuevos (solo aparecen en 2026-2027, no en 2025-2026)
   if (esNuevoDesde26) {
-    if (s.includes('inscrito') || s.includes('reinscrito') || s.includes('nuevo')) {
+    if (s.includes('inscrito') || s.includes('nuevo')) {
       return 'Nuevo';
+    }
+    if (s.includes('proceso')) {
+      return 'Candidato'; // En proceso = prospecto que no ha pagado
     }
     return 'Candidato';
   }
 
-  // Estrictamente 'reinscrito' para no tomar fechas genéricas de otros estatus
-  if (s === 'reinscrito') {
+  // REINSCRITO: Alumno que ya se reinscribió
+  if (s === 'reinscrito' || s.includes('reinscrit')) {
     return 'Reinscrito';
   }
 
+  // INSCRITO: Alumno nuevo que se inscribió (aparece en 2026-2027 pero no en 2025-2026)
+  if (s === 'inscrito' || s.includes('inscrit')) {
+    return 'Nuevo';
+  }
+
+  // BAJA: Puede ser transferencia o baja real según comentario
   if (s.includes('baja') || s.includes('retirado')) {
-    if (c.includes('transferencia') || c.includes('plantel') || c.includes('unidad')) {
+    if (c.includes('transferencia')) {
       return 'Baja Transferencia';
     }
     return 'Baja Real';
   }
 
+  // PENDIENTE o EN PROCESO: Faltan por reinscribir
+  if (s.includes('pendiente') || s.includes('proceso')) {
+    return 'Por Reinscribir';
+  }
+
+  // Default: Por reinscribir
   return 'Por Reinscribir';
 }
 

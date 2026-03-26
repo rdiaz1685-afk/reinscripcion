@@ -484,22 +484,22 @@ async function ejecutarFallbackDirecto(
             }
         }
         
-        // Índices relativos + offset
-        // 2025-2026: Unidad, Grado, Matrícula, Nombre, Grupo
-        // 2026-2027: Unidad, Grado, Matrícula, Nombre, Estatus, Fecha, Comentario
+        // Índices relativos + offset (según orden real de checkboxes marcados)
+        // 2025-2026: Unidad(0), Grado(1), Grupo(2), Matrícula(3), Nombre(4)
+        // 2026-2027: Unidad(0), Grado(1), Estatus(2), Fecha Estatus(3), Matrícula(4), Nombre(5), Comentario(6)
         const columnMap: Record<string, number> = ciclo === '2025-2026' ? {
             'unidad': offset + 0,
             'grado': offset + 1,
-            'matricula': offset + 2,
-            'nombre': offset + 3,
-            'grupo': offset + 4
+            'grupo': offset + 2,
+            'matricula': offset + 3,
+            'nombre': offset + 4
         } : {
             'unidad': offset + 0,
             'grado': offset + 1,
-            'matricula': offset + 2,
-            'nombre': offset + 3,
-            'estatus': offset + 4,
-            'fecha': offset + 5,
+            'estatus': offset + 2,
+            'fecha': offset + 3,
+            'matricula': offset + 4,
+            'nombre': offset + 5,
             'comentario': offset + 6
         };
         
