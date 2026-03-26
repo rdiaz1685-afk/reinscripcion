@@ -431,16 +431,26 @@ async function ejecutarFallbackDirecto(
         onStep?.({ type: 'debug', message: '🔄 Extrayendo datos de tabla HTML (estrategia chatbot)' });
         
         // 1. Hacer click en GENERAR y esperar que la tabla se cargue
-        onStep?.({ type: 'debug', message: '�️ Haciendo click en GENERAR...' });
+        onStep?.({ type: 'debug', message: '🖱️ Haciendo click en GENERAR...' });
         await botonGenerar.click({ force: true });
         
-        // 2. Esperar que la tabla se cargue (como en chatbot)
+        // 2. Esperar activamente a que la tabla aparezca (hasta 20 segundos)
         onStep?.({ type: 'debug', message: '⏳ Esperando que la tabla se cargue...' });
-        await page.waitForTimeout(8000);
+        try {
+            await page.waitForSelector('table tbody tr', { timeout: 20000, state: 'visible' });
+            onStep?.({ type: 'debug', message: '✅ Tabla detectada' });
+        } catch (e) {
+            onStep?.({ type: 'debug', message: '⚠️ Timeout esperando tabla - intentando de todos modos...' });
+        }
+        
+        // Esperar 2 segundos adicionales para que la tabla termine de cargar completamente
+        await page.waitForTimeout(2000);
         
         // 3. Verificar que la tabla existe
-        const tableExists = await page.locator('table tbody tr').count() > 0;
-        if (!tableExists) {
+        const tableCount = await page.locator('table tbody tr').count();
+        onStep?.({ type: 'debug', message: `📊 Filas detectadas en tabla: ${tableCount}` });
+        
+        if (tableCount === 0) {
             onStep?.({ type: 'debug', message: '❌ No se encontró tabla con datos' });
             return false;
         }
