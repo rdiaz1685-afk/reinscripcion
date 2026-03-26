@@ -663,11 +663,11 @@ async function descargarConInterceptor(
 
         page.on('response', responseHandler);
 
-        // FIX 3.1: En producción, timeout corto para activar fallback rápido
+        // FIX 3.1: Timeouts ajustados para dar tiempo al interceptor
         const isCloudEnv = process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
         const esCampusGrande = campus === 'CUMBRES' || campus === 'ANAHUAC';
         const timeoutDuration = isCloudEnv 
-            ? 15_000  // 15 segundos en producción - activar fallback rápido
+            ? 60_000  // 60 segundos en producción - dar tiempo al interceptor
             : (ciclo === '2026-2027'
                 ? (esCampusGrande ? 180_000 : 120_000)
                 : (esCampusGrande ? 120_000 : 60_000));
