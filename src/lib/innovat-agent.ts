@@ -738,7 +738,20 @@ async function descargarConInterceptor(
                 ], Tipo: 'xlsx', Hermanos: 'TODOS',
             };
             
-            const bodyToUse = gralalumnosReqBody || JSON.stringify(templateBody);
+            // Sanitizar el body: Estatus debe ser siempre número entero (no string)
+            // AngularJS puede enviar "-1" como string, lo que hace que Innovat no responda
+            let bodyToUse: string;
+            try {
+                const rawBody = gralalumnosReqBody || JSON.stringify(templateBody);
+                const parsedBody = JSON.parse(rawBody);
+                if (typeof parsedBody.Estatus === 'string') {
+                    parsedBody.Estatus = parseInt(parsedBody.Estatus, 10);
+                    onStep?.({ type: 'debug', message: `🔧 Estatus corregido: "${parsedBody.Estatus}" → ${parsedBody.Estatus} (número)` });
+                }
+                bodyToUse = JSON.stringify(parsedBody);
+            } catch {
+                bodyToUse = gralalumnosReqBody || JSON.stringify(templateBody);
+            }
             
             onStep?.({ type: 'debug', message: `📤 Fetch URL: ${apiUrlFallback}` });
             onStep?.({ type: 'debug', message: `📤 Body preview: ${bodyToUse.substring(0, 100)}...` });
@@ -1015,22 +1028,6 @@ export async function syncFromInnovat(
             // No bloqueamos 'stylesheet' porque AngularJS podría depender de elementos visibles (layout) para clics
             if (['image', 'media', 'font'].includes(type) || request.url().includes('google-analytics')) {
                 route.abort();
-            } else if (request.url().includes('gralalumnos') && request.method() === 'PUT') {
-                // FIX CRÍTICO: Innovat requiere Estatus como número entero.
-                // AngularJS serializa el valor del radio button "Ambos" como string "-1".
-                // Lo corregimos antes de que el request llegue al servidor.
-                try {
-                    const body = request.postData();
-                    if (body) {
-                        const parsed = JSON.parse(body);
-                        if (typeof parsed.Estatus === 'string') {
-                            parsed.Estatus = parseInt(parsed.Estatus, 10);
-                            route.continue({ postData: JSON.stringify(parsed) });
-                            return;
-                        }
-                    }
-                } catch { }
-                route.continue();
             } else {
                 route.continue();
             }
@@ -1201,17 +1198,13 @@ export async function syncFromInnovat(
                         try {
                             onStep?.({ type: 'debug', message: '🔘 Buscando botón radio "Ambos" para ciclo 2026-2027...' });
 
-                            // Para iCheck, necesitamos hacer click en el elemento <ins> que intercepta los clicks
-                            // Buscar el label "Ambos" y luego el ins helper
                             const labelAmbos = page.locator('label').filter({ hasText: /^Ambos$/i }).first();
 
                             if (await labelAmbos.isVisible().catch(() => false)) {
-                                // Hacer click directamente en el label (iCheck lo maneja)
                                 onStep?.({ type: 'debug', message: '✅ Seleccionando "Ambos"...' });
                                 await labelAmbos.click({ force: true });
                                 await page.waitForTimeout(500);
                             } else {
-                                // Fallback: buscar el ins.iCheck-helper directamente
                                 const insHelper = page.locator('.iCheck-helper').first();
                                 if (await insHelper.isVisible({ timeout: 1000 })) {
                                     await insHelper.click({ force: true });
