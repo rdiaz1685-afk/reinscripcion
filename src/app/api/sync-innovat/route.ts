@@ -71,10 +71,23 @@ export async function POST(request: NextRequest) {
                     }
                 );
 
-                // NUEVA ESTRATEGIA: En producción, los datos ya están en BD
-                const isCloudEnv = process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
+                // NUEVA ESTRATEGIA: Si se guardó en BD, no importar Excel
+                // Detectar si se usó el fallback directo (archivos vacíos o "Procesado directamente en BD")
+                const pathMod = await import('path');
+                const fs = await import('fs/promises');
                 
-                if (isCloudEnv && archivosDescargados.length > 0) {
+                let usaronFallbackDirecto = false;
+                if (archivosDescargados.length > 0) {
+                    try {
+                        const primerArchivo = archivosDescargados[0];
+                        const contenido = await fs.readFile(primerArchivo, 'utf-8');
+                        usaronFallbackDirecto = contenido.includes('Procesado directamente en BD') || contenido.length < 100;
+                    } catch {
+                        usaronFallbackDirecto = true; // Si no se puede leer, asumir que se guardó en BD
+                    }
+                }
+                
+                if (usaronFallbackDirecto && archivosDescargados.length > 0) {
                     // Los datos ya fueron guardados directamente en la BD por el agente
                     send({ type: 'processing', message: '⚙️ Datos guardados en BD. Clasificando alumnos...' });
                     
@@ -94,7 +107,7 @@ export async function POST(request: NextRequest) {
                         send({ type: 'ready', message: '✅ Datos guardados. Usa "Procesar Datos" en Config para clasificar.' });
                     }
                 } else if (archivosDescargados.length > 0) {
-                    // En desarrollo, seguir el flujo tradicional con Excel
+                    // Flujo tradicional con Excel (solo si hay archivos Excel reales)
                     send({ type: 'processing', message: '⚙️ Importando archivos descargados...' });
 
                     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
