@@ -505,11 +505,21 @@ async function ejecutarFallbackDirecto(
         const rows = await page.locator('table tbody tr').all();
         const alumnos: Record<string, unknown>[] = [];
         
+        let rowsProcessed = 0;
+        let rowsSkipped = 0;
+        
         for (const row of rows) {
             const cells = await row.locator('td').all();
             const cellTexts = await Promise.all(cells.map(c => c.innerText().catch(() => '')));
             
-            // Extraer usando índices fijos
+            rowsProcessed++;
+            
+            // Log primera fila para debug
+            if (rowsProcessed === 1) {
+                onStep?.({ type: 'debug', message: `🔍 Primera fila (${cellTexts.length} celdas): ${cellTexts.slice(0, 15).map((t, i) => `[${i}]${t.substring(0, 20)}`).join(', ')}` });
+            }
+            
+            // Extraer usando índices detectados
             const alumno: Record<string, unknown> = {
                 'Matricula': cellTexts[columnMap['matricula']]?.trim() || '',
                 'Nombre': cellTexts[columnMap['nombre']]?.trim() || '',
@@ -524,8 +534,15 @@ async function ejecutarFallbackDirecto(
             // Solo agregar si tiene matrícula y nombre
             if (alumno['Matricula'] && alumno['Nombre']) {
                 alumnos.push(alumno);
+            } else {
+                rowsSkipped++;
+                if (rowsSkipped <= 3) {
+                    onStep?.({ type: 'debug', message: `⚠️ Fila ${rowsProcessed} omitida - Matrícula: "${alumno['Matricula']}", Nombre: "${alumno['Nombre']}"` });
+                }
             }
         }
+        
+        onStep?.({ type: 'debug', message: `📊 Procesadas ${rowsProcessed} filas, extraídos ${alumnos.length} alumnos, omitidas ${rowsSkipped} filas` });
         
         onStep?.({ type: 'debug', message: `✅ ${alumnos.length} alumnos extraídos de la tabla` });
         
