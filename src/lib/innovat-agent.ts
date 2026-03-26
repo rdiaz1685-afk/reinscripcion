@@ -611,15 +611,9 @@ async function descargarConInterceptor(
                         return;
                     }
                     
-                    // RENDER/RAILWAY FIX: En entornos cloud, el interceptor tradicional causa OOM
-                    // El motor interno (page.evaluate fetch) es mucho más eficiente
-                    const isCloudEnv = process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
+                    // En todos los entornos: capturar body via page.evaluate (tiene cookies de sesión)
+                    const isCloudEnv = !!(process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production');
                     onStep?.({ type: 'debug', message: `🔍 Env check: RENDER=${process.env.RENDER_ENVIRONMENT} NODE_ENV=${process.env.NODE_ENV} isCloud=${isCloudEnv}` });
-                    
-                    if (isCloudEnv) {
-                        onStep?.({ type: 'debug', message: `✅ Respuesta detectada - motor interno se encargará del procesamiento` });
-                        return; // Dejar que el motor interno maneje todo
-                    }
                     
                     onStep?.({ type: 'debug', message: `📡 Capturando cuerpo masivo...` });
                     const bodyBuffer = await response.body().catch(() => Buffer.from(''));
@@ -663,11 +657,10 @@ async function descargarConInterceptor(
 
         page.on('response', responseHandler);
 
-        // FIX 3.1: Timeouts ajustados para dar tiempo al interceptor
-        const isCloudEnv = process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
+        const isCloudEnv = !!(process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production');
         const esCampusGrande = campus === 'CUMBRES' || campus === 'ANAHUAC';
-        const timeoutDuration = isCloudEnv 
-            ? 60_000  // 60 segundos en producción - dar tiempo al interceptor
+        const timeoutDuration = isCloudEnv
+            ? (esCampusGrande ? 45_000 : 30_000)  // Tiempo real para motor interno en producción
             : (ciclo === '2026-2027'
                 ? (esCampusGrande ? 180_000 : 120_000)
                 : (esCampusGrande ? 120_000 : 60_000));
@@ -687,15 +680,8 @@ async function descargarConInterceptor(
             }
         }, timeoutDuration);
 
-        // FIX 3.5: Segundo motor (Internal Fetch) - DESHABILITADO en producción
-        // En producción, usamos el fallback de fetch directo que es más confiable
+        // Motor interno via page.evaluate - funciona en todos los entornos porque usa las cookies del browser
         const internalFetchTimeout = setTimeout(async () => {
-            // Motor interno deshabilitado en producción - usar fallback
-            const isCloudEnv = process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
-            if (isCloudEnv) {
-                onStep?.({ type: 'debug', message: '⏭️ Motor interno deshabilitado en producción - usando fallback' });
-                return;
-            }
             if (capturado || yaSalido) return;
             
             // Esperar hasta 5 segundos más si el request aún no se capturó
@@ -834,7 +820,7 @@ async function descargarConInterceptor(
             } catch (e) {
                 onStep?.({ type: 'debug', message: `⚠️ Error en evaluación interna: ${e}` });
             }
-        }, (process.env.RENDER_ENVIRONMENT || process.env.NODE_ENV === 'production') ? 5000 : 15000); // 5s en producción, 15s en desarrollo
+        }, 5000); // 5s: tiempo suficiente para que el PUT llegue antes de intentar el motor interno
 
         try {
             // Verificar que el botón GENERAR está habilitado antes de hacer click
@@ -866,13 +852,12 @@ async function descargarConInterceptor(
                 return;
             }
 
-            // En producción, el motor interno maneja todo - no necesitamos esperar el icono de Excel
-            const isCloudEnv = process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
+            // Esperar a que el interceptor o motor interno completen
+            const isCloudEnv = !!(process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production');
             if (isCloudEnv) {
-                onStep?.({ type: 'debug', message: '⏳ Esperando motor interno (5s)...' });
-                // Esperar a que el motor interno complete (timeout + margen)
-                const waitTime = Math.max(10000, timeoutDuration - 50000);
-                for (let i = 0; i < waitTime / 500 && !yaSalido; i++) {
+                onStep?.({ type: 'debug', message: '⏳ Esperando motor interno vía browser context...' });
+                // Solo esperar el tiempo del internalFetchTimeout + margen para procesamiento
+                for (let i = 0; i < 40 && !yaSalido; i++) {
                     await page.waitForTimeout(500).catch(() => {});
                 }
                 clearTimeout(internalFetchTimeout);
