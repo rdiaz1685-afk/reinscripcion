@@ -1105,6 +1105,10 @@ export async function syncFromInnovat(
                         await page.waitForTimeout(2000);
                     }
 
+                    // Esperar a que Innovat cargue completamente el reporte y precargue el campo Unidad
+                    onStep?.({ type: 'debug', message: '⏳ Esperando que Innovat precargue el campo Unidad...' });
+                    await page.waitForTimeout(5000);
+
                     await screenshot(page, `en_reporte_${campus}_${cicloCorto(ciclo)}`, onStep);
 
                     // ── 2c. Localizar botón GENERAR
