@@ -630,13 +630,25 @@ async function descargarConInterceptor(
                     const bodyBuffer = await response.body().catch(() => Buffer.from(''));
                     onStep?.({ type: 'debug', message: `📡 Datos recibidos: ${(bodyBuffer.length / 1024).toFixed(1)} KB` });
 
-                    if (bodyBuffer.length < 10) return;
+                    if (bodyBuffer.length < 10) {
+                        onStep?.({ type: 'debug', message: `⚠️ Body vacío o muy corto (${bodyBuffer.length} bytes), ignorando` });
+                        return;
+                    }
 
                     // Pequeña pausa para permitir que el event loop de NodeJS procese logs y no muera por OOM
                     await new Promise(r => setTimeout(r, 200));
                     
                     const bodyString = bodyBuffer.toString('utf-8');
-                    const json = JSON.parse(bodyString);
+                    onStep?.({ type: 'debug', message: `📋 Body preview: ${bodyString.substring(0, 200)}` });
+                    
+                    let json: any;
+                    try {
+                        json = JSON.parse(bodyString);
+                    } catch (parseErr) {
+                        onStep?.({ type: 'debug', message: `❌ JSON inválido: ${parseErr}` });
+                        return;
+                    }
+                    onStep?.({ type: 'debug', message: `📋 Tipo de respuesta: ${Array.isArray(json) ? `array[${json.length}]` : typeof json} keys=${Array.isArray(json) ? 'N/A' : Object.keys(json||{}).join(',')}` });
                     const result = Array.isArray(json) ? json : (json.data || json.items || []);
 
                     if (Array.isArray(result) && result.length > 0) {
