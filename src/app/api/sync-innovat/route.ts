@@ -80,10 +80,21 @@ export async function POST(request: NextRequest) {
                 if (archivosDescargados.length > 0) {
                     try {
                         const primerArchivo = archivosDescargados[0];
-                        const contenido = await fs.readFile(primerArchivo, 'utf-8');
-                        usaronFallbackDirecto = contenido.includes('Procesado directamente en BD') || contenido.length < 100;
-                    } catch {
-                        usaronFallbackDirecto = true; // Si no se puede leer, asumir que se guardó en BD
+                        const stats = await fs.stat(primerArchivo);
+                        
+                        // Si el archivo es muy pequeño (< 1KB), probablemente es un marcador de texto
+                        if (stats.size < 1024) {
+                            const contenido = await fs.readFile(primerArchivo, 'utf-8');
+                            usaronFallbackDirecto = contenido.includes('Procesado directamente en BD');
+                            send({ type: 'processing', message: `🔍 Archivo pequeño detectado (${stats.size} bytes) - Es marcador: ${usaronFallbackDirecto}` });
+                        } else {
+                            // Archivo grande = Excel real
+                            usaronFallbackDirecto = false;
+                            send({ type: 'processing', message: `📊 Excel real detectado (${Math.round(stats.size / 1024)}KB) - Procederá a importar` });
+                        }
+                    } catch (e) {
+                        usaronFallbackDirecto = false; // Si hay error, asumir que es Excel y proceder con importación
+                        send({ type: 'processing', message: `⚠️ Error detectando tipo, asumiendo Excel: ${e}` });
                     }
                 }
                 
