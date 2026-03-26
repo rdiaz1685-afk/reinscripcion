@@ -1111,8 +1111,38 @@ export async function syncFromInnovat(
 
                     await screenshot(page, `en_reporte_${campus}_${cicloCorto(ciclo)}`, onStep);
 
-                    // ── 2c. Esperar que el botón GENERAR esté visible
-                    // Estrategia chatbot: NO verificar campo Unidad, Innovat ya lo tiene configurado internamente
+                    // ── 2c. Seleccionar Unidad con rutina: Click dropdown → TAB → ENTER
+                    onStep?.({ type: 'debug', message: '🔽 Ejecutando rutina de selección de Unidad...' });
+                    
+                    try {
+                        // 1. Click en el botón "Unidad" (dropdown con flechita)
+                        const botonUnidad = page.locator('button, a, div').filter({ hasText: /^Unidad$/i }).first();
+                        const unidadVisible = await botonUnidad.isVisible({ timeout: 5000 }).catch(() => false);
+                        
+                        if (unidadVisible) {
+                            onStep?.({ type: 'debug', message: '  1️⃣ Click en botón Unidad...' });
+                            await botonUnidad.click({ force: true });
+                            await page.waitForTimeout(500);
+                            
+                            // 2. Presionar TAB
+                            onStep?.({ type: 'debug', message: '  2️⃣ Presionando TAB...' });
+                            await page.keyboard.press('Tab');
+                            await page.waitForTimeout(300);
+                            
+                            // 3. Presionar ENTER
+                            onStep?.({ type: 'debug', message: '  3️⃣ Presionando ENTER...' });
+                            await page.keyboard.press('Enter');
+                            await page.waitForTimeout(1000);
+                            
+                            onStep?.({ type: 'debug', message: '✅ Rutina de selección completada' });
+                        } else {
+                            onStep?.({ type: 'debug', message: '⚠️ Botón Unidad no visible - continuando sin selección' });
+                        }
+                    } catch (e) {
+                        onStep?.({ type: 'debug', message: `⚠️ Error en rutina de selección: ${e}` });
+                    }
+                    
+                    // ── 2d. Esperar que el botón GENERAR esté visible
                     onStep?.({ type: 'debug', message: '⏳ Esperando que el botón GENERAR esté visible...' });
                     
                     const botonGenerar = page.locator('a, button').filter({ hasText: /^generar$/i }).first();
