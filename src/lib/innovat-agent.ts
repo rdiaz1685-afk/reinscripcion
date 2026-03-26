@@ -1288,11 +1288,11 @@ export async function syncFromInnovat(
                         await page.waitForTimeout(tiempoEsperaFormulario);
                     }
 
-                    // ── 2e. Descargar con interceptor de red
+                    // ── 2e. Extraer datos de tabla HTML (estrategia chatbot)
                     const fileName = campusNombreArchivo(campus, ciclo);
                     const filePath = join(uploadDir, fileName);
 
-                    const descargado = await descargarConInterceptor(page, botonGenerar, filePath, campus, ciclo, onStep);
+                    const descargado = await ejecutarFallbackDirecto(page, botonGenerar, filePath, campus, ciclo, onStep, null);
 
                     if (descargado) {
                         downloadedFiles.push(fileName);
