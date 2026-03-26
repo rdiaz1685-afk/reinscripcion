@@ -641,6 +641,7 @@ async function descargarConInterceptor(
                         capturado = true;
                         yaSalido = true;
                         clearTimeout(timeoutId);
+                        clearTimeout(internalFetchTimeout);
                         page.off('response', responseHandler);
                         page.off('request', requestHandler);
                         await writeFile(filePath, buffer);
@@ -1080,12 +1081,18 @@ export async function syncFromInnovat(
                     }
                     
                     // FIX CRÍTICO: Limpiar página sin destruirla para no perder sessionStorage de Angular
+                    // También limpiar window.__innovatData para evitar race condition entre ciclos
+                    await page.evaluate(() => {
+                        delete (window as any).__innovatData;
+                    }).catch(() => {});
+
                     if (!esPrimeraCombinacion) {
                         onStep?.({ type: 'debug', message: `♻️ Página limpia para ${campus} ${ciclo}... (Soft reload)` });
                         try {
                             // Cambiamos el hash de Angular suavemente para forzar que el router se limpie
                             // sin necesidad de refrescar todo el navegador (que causa pérdida de sesión)
                             await page.evaluate(() => {
+                                delete (window as any).__innovatData;
                                 window.location.hash = '/Inicio';
                             });
                             await page.waitForTimeout(2000);
