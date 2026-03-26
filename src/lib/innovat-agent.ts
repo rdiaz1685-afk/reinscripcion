@@ -512,12 +512,14 @@ async function ejecutarFallbackDirecto(
             // Grupo: 1-2 letras mayúsculas
             const grupo = cellTexts.find(t => /^[A-Z]{1,2}$/i.test(t.trim()))?.trim();
             
-            // Estatus: Palabras clave conocidas
+            // Estatus: Palabras clave específicas (evitar capturar ciudad como "MONTERREY")
             const estatus = cellTexts.find(t => {
                 const upper = t.trim().toUpperCase();
-                return upper.includes('REINSCRITO') || upper.includes('BAJA') || 
-                       upper.includes('NUEVO') || upper.includes('ACTIVO') ||
-                       upper.includes('INSCRITO');
+                // Debe ser exactamente una de estas palabras clave, no contener ciudad
+                return (upper === 'REINSCRITO' || upper === 'BAJA' || 
+                       upper === 'NUEVO' || upper === 'ACTIVO' ||
+                       upper === 'INSCRITO' || upper === 'INSCRITA' ||
+                       upper.startsWith('BAJA ') || upper.startsWith('REINSCRIT'));
             })?.trim();
             
             // Unidad: Usar campus como fallback
@@ -528,6 +530,26 @@ async function ejecutarFallbackDirecto(
                        upper.includes('DOMINIO');
             })?.trim() || campus;
             
+            // Comentario: Texto largo que contenga palabras clave de comentarios
+            const comentario = cellTexts.find(t => {
+                const upper = t.trim().toUpperCase();
+                const len = t.trim().length;
+                // Buscar texto que contenga palabras clave de comentarios o sea texto largo
+                return len > 10 && (
+                    upper.includes('TRANSFERENCIA') || 
+                    upper.includes('CAMBIO') ||
+                    upper.includes('MOTIVO') ||
+                    upper.includes('OBSERV') ||
+                    (len > 20 && !upper.includes('MONTERREY') && !upper.includes('LEON'))
+                );
+            })?.trim() || '';
+            
+            // Fecha: Buscar formato de fecha (DD/MM/YYYY, DD-MMM, etc.)
+            const fechaEstatus = cellTexts.find(t => {
+                const txt = t.trim();
+                return /\d{1,2}[\/-]\w{3}/.test(txt) || /\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}/.test(txt);
+            })?.trim() || '';
+            
             const alumno: Record<string, unknown> = {
                 'Matricula': matricula || '',
                 'Nombre': nombre || '',
@@ -535,8 +557,8 @@ async function ejecutarFallbackDirecto(
                 'Grado': grado || '',
                 'Grupo': grupo || '',
                 'Estatus': estatus || '',
-                'Fecha estatus': '',
-                'Comentario estatus': ''
+                'Fecha estatus': fechaEstatus,
+                'Comentario estatus': comentario
             };
             
             // Solo agregar si tiene matrícula y nombre
