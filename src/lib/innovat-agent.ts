@@ -161,22 +161,38 @@ async function procesarYGuardarDatos(
 
         // Guardar en lote (más eficiente)
         if (datosParaGuardar.length > 0) {
+            onStep?.({ type: 'debug', message: `💾 Guardando ${datosParaGuardar.length} registros en BD...` });
+            onStep?.({ type: 'debug', message: `🔍 Verificando db: ${typeof db}` });
+            
             // Primero borrar registros existentes de este campus/ciclo
             if (ciclo === '2025-2026') {
-                await db.alumno25_26.deleteMany({
+                onStep?.({ type: 'debug', message: `🗑️ Borrando registros existentes de ${unidadNormalizada} en alumno25_26...` });
+                const deleted = await db.alumno25_26.deleteMany({
                     where: { unidad: unidadNormalizada }
                 });
-                await db.alumno25_26.createMany({
+                onStep?.({ type: 'debug', message: `🗑️ Borrados ${deleted.count} registros` });
+                
+                onStep?.({ type: 'debug', message: `➕ Insertando ${datosParaGuardar.length} registros en alumno25_26...` });
+                const created = await db.alumno25_26.createMany({
                     data: datosParaGuardar
                 });
+                onStep?.({ type: 'debug', message: `➕ Insertados ${created.count} registros` });
             } else {
-                await db.alumno26_27.deleteMany({
+                onStep?.({ type: 'debug', message: `🗑️ Borrando registros existentes de ${unidadNormalizada} en alumno26_27...` });
+                const deleted = await db.alumno26_27.deleteMany({
                     where: { unidad: unidadNormalizada }
                 });
-                await db.alumno26_27.createMany({
+                onStep?.({ type: 'debug', message: `🗑️ Borrados ${deleted.count} registros` });
+                
+                onStep?.({ type: 'debug', message: `➕ Insertando ${datosParaGuardar.length} registros en alumno26_27...` });
+                const created = await db.alumno26_27.createMany({
                     data: datosParaGuardar
                 });
+                onStep?.({ type: 'debug', message: `➕ Insertados ${created.count} registros` });
             }
+            onStep?.({ type: 'debug', message: `✅ Guardado completado exitosamente` });
+        } else {
+            onStep?.({ type: 'debug', message: `⚠️ No hay datos para guardar (datosParaGuardar.length = 0)` });
         }
 
         onStep?.({ type: 'saved', campus, ciclo, count: datosParaGuardar.length });
@@ -608,16 +624,20 @@ async function ejecutarFallbackDirecto(
             }
 
             onStep?.({ type: 'debug', message: `✅ ${json.length} alumnos obtenidos con Estatus ${estatusValue}` });
+            onStep?.({ type: 'debug', message: `📊 Muestra de datos: ${JSON.stringify(json[0]).substring(0, 200)}` });
             
             // Procesar directamente en BD
             try {
+                onStep?.({ type: 'debug', message: `🔄 Llamando a procesarYGuardarDatos...` });
                 const guardados = await procesarYGuardarDatos(json, campus, ciclo, onStep);
+                onStep?.({ type: 'debug', message: `📝 procesarYGuardarDatos retornó: ${guardados}` });
+                
                 if (guardados > 0) {
                     onStep?.({ type: 'debug', message: `✅ ${guardados} alumnos guardados en BD` });
                     await writeFile(filePath, Buffer.from('Procesado directamente en BD'));
                     return true;
                 } else {
-                    onStep?.({ type: 'debug', message: `⚠️ No se guardaron registros` });
+                    onStep?.({ type: 'debug', message: `⚠️ procesarYGuardarDatos retornó 0 - no se guardó nada` });
                 }
             } catch (error) {
                 onStep?.({ type: 'debug', message: `❌ Error guardando: ${error}` });
