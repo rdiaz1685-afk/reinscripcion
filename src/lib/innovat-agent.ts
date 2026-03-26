@@ -1348,11 +1348,24 @@ export async function syncFromInnovat(
                         await page.waitForTimeout(tiempoEsperaFormulario);
                     }
 
-                    // ── 2e. Descargar Excel usando interceptor
+                    // ── 2e. Descargar datos
                     const fileName = campusNombreArchivo(campus, ciclo);
                     const filePath = join(uploadDir, fileName);
 
-                    const descargado = await descargarConInterceptor(page, botonGenerar, filePath, campus, ciclo, onStep, null);
+                    // Para 2026-2027 en producción: el interceptor no puede capturar el body
+                    // (Innovat responde en modo streaming/chunked). Usamos fallback directo.
+                    const isCloudEnv = !!(process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production');
+                    let descargado = false;
+
+                    if (ciclo === '2026-2027' && isCloudEnv) {
+                        onStep?.({ type: 'debug', message: `🎯 2026-2027 en cloud: usando fetch directo via browser context` });
+                        // Hacer click primero para que Innovat registre la sesión, luego fetch directo
+                        await botonGenerar.click({ force: true }).catch(() => {});
+                        await page.waitForTimeout(2000);
+                        descargado = await ejecutarFallbackDirecto(page, botonGenerar, filePath, campus, ciclo, onStep, null);
+                    } else {
+                        descargado = await descargarConInterceptor(page, botonGenerar, filePath, campus, ciclo, onStep, null);
+                    }
 
                     if (descargado) {
                         downloadedFiles.push(fileName);
