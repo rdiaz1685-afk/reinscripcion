@@ -544,14 +544,6 @@ async function ejecutarFallbackDirecto(
 
         onStep?.({ type: 'debug', message: `🔍 Unit ID ${unitId} para ${campus} ${ciclo}` });
 
-        // Hacer click en GENERAR para activar la sesión (sin esperar respuesta)
-        try {
-            await botonGenerar.click({ force: true, timeout: 5000 });
-            await page.waitForTimeout(2000);
-        } catch (e) {
-            onStep?.({ type: 'debug', message: `⚠️ Click en GENERAR: ${e}` });
-        }
-
         const estatusValues = ciclo === '2026-2027' ? [-1, 1, 0, 2] : [1];
 
         for (const estatusValue of estatusValues) {
