@@ -503,6 +503,13 @@ async function ejecutarFallbackDirecto(
         // 5. Extraer todas las filas - usar evaluate para obtener texto real de cada columna
         onStep?.({ type: 'debug', message: '📊 Extrayendo datos de la tabla usando evaluate...' });
         
+        // Capturar logs de consola
+        page.on('console', msg => {
+            if (msg.text().includes('[DEBUG]')) {
+                onStep?.({ type: 'debug', message: `🖥️ Browser: ${msg.text()}` });
+            }
+        });
+        
         const alumnos = await page.evaluate((colMap) => {
             const rows = Array.from(document.querySelectorAll('table tbody tr'));
             const result: any[] = [];
