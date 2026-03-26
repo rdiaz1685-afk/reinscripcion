@@ -488,6 +488,13 @@ async function descargarConInterceptor(
     ciclo: string,
     onStep?: SyncCallback
 ): Promise<boolean> {
+    // En producción, ir directo al fallback (interceptor deshabilitado)
+    const isCloudEnv = process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
+    if (isCloudEnv) {
+        onStep?.({ type: 'debug', message: '⏭️ Saltando interceptor - usando fallback directo en producción' });
+        return false; // Esto activará el fallback inmediatamente
+    }
+    
     // ── Intento 1: Interceptar via page.on('response') ──────────────────────
     const exito = await new Promise<boolean>(async (resolve) => {
         let capturado = false;
