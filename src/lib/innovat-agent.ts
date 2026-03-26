@@ -164,11 +164,17 @@ async function procesarYGuardarDatos(
             onStep?.({ type: 'debug', message: `💾 Guardando ${datosParaGuardar.length} registros en BD...` });
             onStep?.({ type: 'debug', message: `🔍 Verificando db: ${typeof db}` });
             
-            // Primero borrar registros existentes de este campus/ciclo
+            // Primero borrar registros existentes de este campus/ciclo (todas las variantes)
             if (ciclo === '2025-2026') {
-                onStep?.({ type: 'debug', message: `🗑️ Borrando registros existentes de ${unidadNormalizada} en alumno25_26...` });
+                onStep?.({ type: 'debug', message: `🗑️ Borrando registros existentes de ${campus} en alumno25_26...` });
                 const deleted = await db.alumno25_26.deleteMany({
-                    where: { unidad: unidadNormalizada }
+                    where: { 
+                        OR: [
+                            { unidad: campus.toUpperCase() },
+                            { unidad: unidadNormalizada },
+                            { unidad: campus.toLowerCase() }
+                        ]
+                    }
                 });
                 onStep?.({ type: 'debug', message: `🗑️ Borrados ${deleted.count} registros` });
                 
@@ -178,9 +184,15 @@ async function procesarYGuardarDatos(
                 });
                 onStep?.({ type: 'debug', message: `➕ Insertados ${created.count} registros` });
             } else {
-                onStep?.({ type: 'debug', message: `🗑️ Borrando registros existentes de ${unidadNormalizada} en alumno26_27...` });
+                onStep?.({ type: 'debug', message: `🗑️ Borrando registros existentes de ${campus} en alumno26_27...` });
                 const deleted = await db.alumno26_27.deleteMany({
-                    where: { unidad: unidadNormalizada }
+                    where: { 
+                        OR: [
+                            { unidad: campus.toUpperCase() },
+                            { unidad: unidadNormalizada },
+                            { unidad: campus.toLowerCase() }
+                        ]
+                    }
                 });
                 onStep?.({ type: 'debug', message: `🗑️ Borrados ${deleted.count} registros` });
                 
