@@ -500,49 +500,51 @@ async function ejecutarFallbackDirecto(
         onStep?.({ type: 'debug', message: `📋 Headers: ${headerTexts.join(', ')}` });
         onStep?.({ type: 'debug', message: `📋 Columnas detectadas: ${JSON.stringify(columnMap)}` });
         
-        // 5. Extraer todas las filas usando índices fijos
-        onStep?.({ type: 'debug', message: '📊 Extrayendo datos de la tabla...' });
-        const rows = await page.locator('table tbody tr').all();
-        const alumnos: Record<string, unknown>[] = [];
+        // 5. Extraer todas las filas - usar evaluate para obtener texto real de cada columna
+        onStep?.({ type: 'debug', message: '📊 Extrayendo datos de la tabla usando evaluate...' });
         
-        let rowsProcessed = 0;
-        let rowsSkipped = 0;
-        
-        for (const row of rows) {
-            const cells = await row.locator('td').all();
-            const cellTexts = await Promise.all(cells.map(c => c.innerText().catch(() => '')));
+        const alumnos = await page.evaluate((colMap) => {
+            const rows = Array.from(document.querySelectorAll('table tbody tr'));
+            const result: any[] = [];
+            let rowsProcessed = 0;
             
-            rowsProcessed++;
-            
-            // Log primera fila para debug
-            if (rowsProcessed === 1) {
-                onStep?.({ type: 'debug', message: `🔍 Primera fila (${cellTexts.length} celdas): ${cellTexts.slice(0, 15).map((t, i) => `[${i}]${t.substring(0, 20)}`).join(', ')}` });
-            }
-            
-            // Extraer usando índices detectados
-            const alumno: Record<string, unknown> = {
-                'Matricula': cellTexts[columnMap['matricula']]?.trim() || '',
-                'Nombre': cellTexts[columnMap['nombre']]?.trim() || '',
-                'Unidad': cellTexts[columnMap['unidad']]?.trim() || campus,
-                'Grado': cellTexts[columnMap['grado']]?.trim() || '',
-                'Grupo': cellTexts[columnMap['grupo']]?.trim() || '',
-                'Estatus': cellTexts[columnMap['estatus']]?.trim() || '',
-                'Fecha estatus': cellTexts[columnMap['fecha']]?.trim() || '',
-                'Comentario estatus': cellTexts[columnMap['comentario']]?.trim() || ''
-            };
-            
-            // Solo agregar si tiene matrícula y nombre
-            if (alumno['Matricula'] && alumno['Nombre']) {
-                alumnos.push(alumno);
-            } else {
-                rowsSkipped++;
-                if (rowsSkipped <= 3) {
-                    onStep?.({ type: 'debug', message: `⚠️ Fila ${rowsProcessed} omitida - Matrícula: "${alumno['Matricula']}", Nombre: "${alumno['Nombre']}"` });
+            for (const row of rows) {
+                rowsProcessed++;
+                const cells = Array.from(row.querySelectorAll('td'));
+                
+                // Extraer texto de cada celda
+                const matricula = cells[colMap.matricula]?.innerText?.trim() || '';
+                const nombre = cells[colMap.nombre]?.innerText?.trim() || '';
+                const unidad = cells[colMap.unidad]?.innerText?.trim() || '';
+                const grado = cells[colMap.grado]?.innerText?.trim() || '';
+                const grupo = cells[colMap.grupo]?.innerText?.trim() || '';
+                const estatus = cells[colMap.estatus]?.innerText?.trim() || '';
+                const fecha = cells[colMap.fecha]?.innerText?.trim() || '';
+                const comentario = cells[colMap.comentario]?.innerText?.trim() || '';
+                
+                // Log primera fila
+                if (rowsProcessed === 1) {
+                    console.log('[DEBUG] Primera fila:', { matricula, nombre, unidad, grado, grupo, estatus, fecha, comentario });
+                    console.log('[DEBUG] Celdas:', cells.map((c, i) => `[${i}]${c.innerText?.substring(0, 20)}`).slice(0, 15).join(', '));
+                }
+                
+                // Solo agregar si tiene matrícula y nombre
+                if (matricula && nombre) {
+                    result.push({
+                        'Matricula': matricula,
+                        'Nombre': nombre,
+                        'Unidad': unidad,
+                        'Grado': grado,
+                        'Grupo': grupo,
+                        'Estatus': estatus,
+                        'Fecha estatus': fecha,
+                        'Comentario estatus': comentario
+                    });
                 }
             }
-        }
-        
-        onStep?.({ type: 'debug', message: `📊 Procesadas ${rowsProcessed} filas, extraídos ${alumnos.length} alumnos, omitidas ${rowsSkipped} filas` });
+            
+            return result;
+        }, columnMap);
         
         onStep?.({ type: 'debug', message: `✅ ${alumnos.length} alumnos extraídos de la tabla` });
         
