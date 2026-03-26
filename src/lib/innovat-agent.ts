@@ -1116,11 +1116,9 @@ export async function syncFromInnovat(
                         continue;
                     }
 
-                    // ── 2d. ESTRATEGIA DE UNIT ID: Capturar IDs reales desde el autocomplete de Innovat
-                    // El problema confirmado: para 2026-2027, las unidades pueden tener nombres/IDs distintos
-                    // y el autocomplete no encuentra resultados al buscar "CUMB" o "ANÁH"
-                    // Solución: interceptar la respuesta del autocomplete API y obtener los IDs directamente,
-                    // luego inyectarlos en el scope de AngularJS sin pasar por la UI
+                    // ── 2d. Verificar que el campo Unidad ya está preseleccionado
+                    // Después de cambiar campus/ciclo, el campo "Unidad" ya viene con el valor correcto
+                    // NO intentar escribir en él porque borra el valor preseleccionado
                     try {
                         const seleccioneInput = page.locator([
                             'md-autocomplete input[placeholder*="Seleccione"]',
@@ -1130,146 +1128,15 @@ export async function syncFromInnovat(
                         ].join(', ')).first();
 
                         const inputVisible = await seleccioneInput.isVisible({ timeout: 3000 }).catch(() => false);
-                        onStep?.({ type: 'debug', message: `🔍 Campo "Seleccione..." visible: ${inputVisible}` });
+                        const valorActual = await seleccioneInput.inputValue({ timeout: 1000 }).catch(() => '');
+                        onStep?.({ type: 'debug', message: `🔍 Campo Unidad: "${valorActual || '(vacío)'}"` });
 
-                        if (inputVisible) {
-                            const valorActual = await seleccioneInput.inputValue({ timeout: 1000 }).catch(() => '');
-                            onStep?.({ type: 'debug', message: `🔍 Valor actual: "${valorActual || '(vacío)'}"` });
-
-                            if (!valorActual || valorActual.trim() === '') {
-                                // Estrategia 1: Interceptar la respuesta del autocomplete API
-                                // Cuando se hace click y se escribe, Innovat llama algo como /api/unidadesfiltro o similar
-                                let unidadIdCapturado: string | null = null;
-                                let todasLasUnidades: Array<{ id: string, nombre: string }> = [];
-
-                                const autocompleteHandler = async (response: import('playwright').Response) => {
-                                    try {
-                                        const url = response.url();
-                                        // Capturar cualquier respuesta JSON que parezca ser de unidades
-                                        if ((url.includes('unidad') || url.includes('Unidad') || url.includes('plantel') || url.includes('filtro'))
-                                            && response.status() === 200) {
-                                            const text = await response.text().catch(() => '');
-                                            if (text.startsWith('[') || text.startsWith('{')) {
-                                                onStep?.({ type: 'debug', message: `📡 Autocomplete API: ${url.split('/').pop()} → ${text.substring(0, 200)}` });
-                                                try {
-                                                    const data = JSON.parse(text);
-                                                    const items = Array.isArray(data) ? data : (data.data || data.items || []);
-                                                    for (const item of items) {
-                                                        // Innovat usa diferentes nombres de campo: Id, id, IdUnidad, Nombre, nombre, Descripcion
-                                                        const id = String(item.Id ?? item.id ?? item.IdUnidad ?? item.IdPlantel ?? '');
-                                                        const nombre = String(item.Nombre ?? item.nombre ?? item.Descripcion ?? item.descripcion ?? item.NombreUnidad ?? '');
-                                                        if (id) todasLasUnidades.push({ id, nombre });
-                                                        // Si el nombre coincide con el campus, capturar el ID
-                                                        const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
-                                                        if (norm(nombre).includes(norm(campus).substring(0, 4))) {
-                                                            unidadIdCapturado = id;
-                                                        }
-                                                    }
-                                                } catch { }
-                                            }
-                                        }
-                                    } catch { }
-                                };
-                                page.on('response', autocompleteHandler);
-
-                                // Disparar el autocomplete con varios intentos
-                                await seleccioneInput.click({ force: true });
-                                await page.waitForTimeout(800);
-
-                                // Intento 1: Escribir el campus para filtrar
-                                const campusBusqueda = campus === 'ANAHUAC' ? 'ANÁHUAC' : campus;
-                                await seleccioneInput.type(campusBusqueda.substring(0, 4), { delay: 80 });
-                                await page.waitForTimeout(2000); // Más tiempo para que responda el servidor
-
-                                const sugerencias = page.locator([
-                                    'ul.md-autocomplete-suggestions li',
-                                    'li[md-virtual-repeat]',
-                                    'md-virtual-repeat-container li',
-                                    '.md-autocomplete-suggestions-container li',
-                                ].join(', '));
-
-                                let countS = await sugerencias.count().catch(() => 0);
-                                onStep?.({ type: 'debug', message: `📋 Sugerencias con "${campusBusqueda.substring(0, 4)}": ${countS}` });
-
-                                // Intento 2: Borrar y probar con espacio para ver TODAS las opciones
-                                if (countS === 0) {
-                                    await seleccioneInput.fill('');
-                                    await seleccioneInput.press('Space');
-                                    await page.waitForTimeout(2000);
-                                    countS = await sugerencias.count().catch(() => 0);
-                                    onStep?.({ type: 'debug', message: `📋 Sugerencias con espacio: ${countS}` });
-                                }
-
-                                // Intento 3: Sin texto, solo ArrowDown
-                                if (countS === 0) {
-                                    await seleccioneInput.fill('');
-                                    await page.waitForTimeout(500);
-                                    await seleccioneInput.press('ArrowDown');
-                                    await page.waitForTimeout(2000);
-                                    countS = await sugerencias.count().catch(() => 0);
-                                    onStep?.({ type: 'debug', message: `📋 Sugerencias con ArrowDown: ${countS}` });
-                                }
-
-                                page.off('response', autocompleteHandler);
-
-                                // Loguear TODAS las unidades capturadas de la API
-                                if (todasLasUnidades.length > 0) {
-                                    onStep?.({ type: 'debug', message: `📋 Unidades capturadas desde API (${todasLasUnidades.length}):` });
-                                    for (const u of todasLasUnidades.slice(0, 15)) {
-                                        onStep?.({ type: 'debug', message: `  ID=${u.id} → "${u.nombre}"` });
-                                    }
-                                }
-
-                                if (countS > 0) {
-                                    // Hay sugerencias en la UI — loguear y seleccionar la que coincida
-                                    let seleccionado = false;
-                                    for (let s = 0; s < countS && s < 15; s++) {
-                                        const t = (await sugerencias.nth(s).textContent().catch(() => '')) ?? '';
-                                        onStep?.({ type: 'debug', message: `  sugerencia[${s}]: "${t.trim()}"` });
-                                        if (t.toUpperCase().includes(campus.substring(0, 4))) {
-                                            await sugerencias.nth(s).click();
-                                            seleccionado = true;
-                                            onStep?.({ type: 'debug', message: `✅ Unidad "${campus}" seleccionada desde UI` });
-                                            break;
-                                        }
-                                    }
-                                    if (!seleccionado) {
-                                        await sugerencias.first().click();
-                                        onStep?.({ type: 'debug', message: `⚠️ Seleccionada primera sugerencia de UI` });
-                                    }
-                                    await page.waitForTimeout(800);
-                                } else if (unidadIdCapturado) {
-                                    // No hay UI pero capturamos el ID desde la API — inyectar en AngularJS
-                                    onStep?.({ type: 'debug', message: `🔧 Inyectando unit ID ${unidadIdCapturado} en AngularJS scope...` });
-                                    await page.keyboard.press('Escape');
-                                    await page.evaluate((uid: string) => {
-                                        try {
-                                            // @ts-ignore
-                                            const w = window as any;
-                                            const scope = w.angular?.element(document.querySelector('[ng-controller], .ng-scope'))?.scope?.();
-                                            if (scope) {
-                                                scope.$apply(() => {
-                                                    if (scope.vm) scope.vm.Ids = [uid];
-                                                    else if (scope.Ids !== undefined) scope.Ids = [uid];
-                                                });
-                                            }
-                                        } catch { }
-                                    }, unidadIdCapturado);
-                                    await page.waitForTimeout(500);
-                                    onStep?.({ type: 'debug', message: `✅ Unit ID ${unidadIdCapturado} inyectado` });
-                                } else {
-                                    // Sin sugerencias UI ni API — el campo queda vacío
-                                    await page.keyboard.press('Escape');
-                                    onStep?.({ type: 'debug', message: `❌ No se pudo seleccionar unidad para ${campus} ${ciclo}` });
-                                    onStep?.({ type: 'debug', message: `ℹ️ Unidades disponibles en API: ${JSON.stringify(todasLasUnidades)}` });
-                                }
-
-                                await screenshot(page, `despues_seleccione_${campus}_${cicloCorto(ciclo)}`, onStep);
-                            } else {
-                                onStep?.({ type: 'debug', message: `✅ Campo ya tiene valor: "${valorActual}"` });
-                            }
+                        // El campo ya debe tener el valor correcto después de cambiar campus/ciclo
+                        // Si está vacío, es un problema pero NO intentar escribir porque borra el valor
+                        if (!valorActual || valorActual.trim() === '') {
+                            onStep?.({ type: 'debug', message: `⚠️ Campo Unidad vacío - puede ser un problema` });
                         } else {
-                            onStep?.({ type: 'debug', message: `ℹ️ Campo "Seleccione..." no visible — campus IDs preseleccionados por AngularJS` });
+                            onStep?.({ type: 'debug', message: `✅ Campo Unidad ya tiene valor: "${valorActual}"` });
                         }
                     } catch (e) {
                         onStep?.({ type: 'debug', message: `⚠️ Error en campo Seleccione: ${e}` });
