@@ -115,26 +115,37 @@ export async function POST(request: NextRequest) {
 
                     // Paso 1: Importar cada archivo usando solo el nombre base (no ruta absoluta)
                     let importadosOk = 0;
+                    send({ type: 'processing', message: `📂 Importando ${archivosDescargados.length} archivos...` });
+                    
                     for (const filePath of archivosDescargados) {
                         const fileName = pathMod.basename(filePath);
                         const tipo = fileName.includes('25-26') ? '25-26' : '26-27';
+                        send({ type: 'processing', message: `📥 Importando ${fileName}...` });
+                        
                         try {
                             const importRes = await fetch(`${baseUrl}/api/import`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ fileName, tipo }),
                             });
+                            
                             if (importRes.ok) {
-                                send({ type: 'processing', message: `✅ Importado: ${fileName}` });
+                                const data = await importRes.json();
+                                send({ type: 'processing', message: `✅ ${fileName}: ${data.message || 'Importado'}` });
                                 importadosOk++;
                             } else {
                                 const err = await importRes.json().catch(() => ({}));
-                                send({ type: 'error', message: `⚠️ Error importando ${fileName}: ${err.error || importRes.status}` });
+                                const errorMsg = err.error || err.details || importRes.statusText;
+                                send({ type: 'error', message: `⚠️ ${fileName}: ${errorMsg}` });
+                                console.error(`Error importando ${fileName}:`, err);
                             }
                         } catch (e) {
-                            send({ type: 'error', message: `⚠️ Error importando ${fileName}: ${e}` });
+                            send({ type: 'error', message: `⚠️ ${fileName}: ${e}` });
+                            console.error(`Excepción importando ${fileName}:`, e);
                         }
                     }
+                    
+                    send({ type: 'processing', message: `📊 Importados: ${importadosOk}/${archivosDescargados.length}` });
 
                     // Paso 2: Disparar el procesamiento/clasificación solo si se importó algo
                     if (importadosOk > 0) {
