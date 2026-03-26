@@ -467,29 +467,43 @@ async function ejecutarFallbackDirecto(
             return false;
         }
         
-        // 4. Usar índices fijos según el ciclo (ya limpiamos y marcamos solo los necesarios)
-        onStep?.({ type: 'debug', message: '🔍 Usando índices fijos de columnas...' });
+        // 4. Detectar offset de columnas adicionales (checkboxes, botones, etc.)
+        onStep?.({ type: 'debug', message: '🔍 Detectando estructura de tabla...' });
         
-        // Índices fijos después de limpiar checkboxes:
-        // 2025-2026: Unidad(0), Grado(1), Matrícula(2), Nombre(3), Grupo(4)
-        // 2026-2027: Unidad(0), Grado(1), Matrícula(2), Nombre(3), Estatus(4), Fecha(5), Comentario(6)
+        // Contar cuántas columnas hay antes de nuestros datos
+        const headers = await page.locator('table thead th').all();
+        let offset = 0;
+        
+        for (let i = 0; i < headers.length; i++) {
+            const text = (await headers[i].innerText().catch(() => '')).toUpperCase().trim();
+            // Buscar la primera columna de nuestros datos (Unidad, Grado o Matrícula)
+            if (text.includes('UNIDAD') || text.includes('GRADO') || text.includes('MATR')) {
+                offset = i;
+                onStep?.({ type: 'debug', message: `� Primera columna de datos encontrada en índice ${offset}` });
+                break;
+            }
+        }
+        
+        // Índices relativos + offset
+        // 2025-2026: Unidad, Grado, Matrícula, Nombre, Grupo
+        // 2026-2027: Unidad, Grado, Matrícula, Nombre, Estatus, Fecha, Comentario
         const columnMap: Record<string, number> = ciclo === '2025-2026' ? {
-            'unidad': 0,
-            'grado': 1,
-            'matricula': 2,
-            'nombre': 3,
-            'grupo': 4
+            'unidad': offset + 0,
+            'grado': offset + 1,
+            'matricula': offset + 2,
+            'nombre': offset + 3,
+            'grupo': offset + 4
         } : {
-            'unidad': 0,
-            'grado': 1,
-            'matricula': 2,
-            'nombre': 3,
-            'estatus': 4,
-            'fecha': 5,
-            'comentario': 6
+            'unidad': offset + 0,
+            'grado': offset + 1,
+            'matricula': offset + 2,
+            'nombre': offset + 3,
+            'estatus': offset + 4,
+            'fecha': offset + 5,
+            'comentario': offset + 6
         };
         
-        onStep?.({ type: 'debug', message: `📋 Índices de columnas: ${JSON.stringify(columnMap)}` });
+        onStep?.({ type: 'debug', message: `📋 Índices de columnas (con offset ${offset}): ${JSON.stringify(columnMap)}` });
         
         // 5. Extraer todas las filas usando índices fijos
         onStep?.({ type: 'debug', message: '📊 Extrayendo datos de la tabla...' });
