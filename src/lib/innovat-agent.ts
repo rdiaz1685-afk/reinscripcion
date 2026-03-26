@@ -958,31 +958,38 @@ async function descargarConInterceptor(
                 Estatus: estatusValue
             });
 
-            const result = await page.evaluate(
-                async ({ url, body }: { url: string; body: string; reqHeaders: any }) => {
-                    // Plan B: Usar SOLO credentials: 'include' (cookies actuales del browser)
-                    // NO usar reqHeaders obsoletos — el browser tiene el token fresco
-                    for (const method of ['PUT', 'POST']) {
-                        try {
-                            const res = await fetch(url, {
-                                method,
-                                credentials: 'include',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Accept': 'application/json, text/plain, */*'
-                                },
-                                body,
-                            });
-                            const text = await res.text();
-                            return { status: res.status, text, method };
-                        } catch (e) {
-                            return { status: -1, text: String(e), method };
+            onStep?.({ type: 'debug', message: `🌐 Ejecutando fetch desde navegador a ${apiUrl}...` });
+            let result: { status: number; text: string; method: string };
+            try {
+                result = await page.evaluate(
+                    async ({ url, body }: { url: string; body: string; reqHeaders: any }) => {
+                        // Plan B: Usar SOLO credentials: 'include' (cookies actuales del browser)
+                        // NO usar reqHeaders obsoletos — el browser tiene el token fresco
+                        for (const method of ['PUT', 'POST']) {
+                            try {
+                                const res = await fetch(url, {
+                                    method,
+                                    credentials: 'include',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Accept': 'application/json, text/plain, */*'
+                                    },
+                                    body,
+                                });
+                                const text = await res.text();
+                                return { status: res.status, text, method };
+                            } catch (e) {
+                                return { status: -1, text: String(e), method };
+                            }
                         }
-                    }
-                    return { status: 500, text: 'No se intentó ningún método', method: '' };
-                },
-                { url: apiUrl, body: scanBody, reqHeaders: gralalumnosReqHeaders }
-            );
+                        return { status: 500, text: 'No se intentó ningún método', method: '' };
+                    },
+                    { url: apiUrl, body: scanBody, reqHeaders: gralalumnosReqHeaders }
+                );
+            } catch (evalError) {
+                onStep?.({ type: 'debug', message: `❌ Error en page.evaluate: ${evalError}` });
+                continue;
+            }
 
             if (result.status !== 200 || result.text.length < 5) {
                 // Loguear el body del error para diagnóstico
@@ -1010,6 +1017,7 @@ async function descargarConInterceptor(
             
             if (isCloudEnv) {
                 onStep?.({ type: 'debug', message: `📊 Procesando ${json.length} alumnos directamente en BD...` });
+                onStep?.({ type: 'debug', message: `🔍 Verificando db: ${typeof db} - ${db ? 'existe' : 'undefined'}` });
                 try {
                     // Procesar en Node.js (aquí tenemos acceso a db)
                     const guardados = await procesarYGuardarDatos(json, campus, ciclo, onStep);
@@ -1024,6 +1032,7 @@ async function descargarConInterceptor(
                     }
                 } catch (error) {
                     onStep?.({ type: 'debug', message: `❌ Error en procesarYGuardarDatos: ${error}` });
+                    onStep?.({ type: 'debug', message: `❌ Stack: ${error instanceof Error ? error.stack : 'N/A'}` });
                     return false;
                 }
             }
