@@ -167,16 +167,14 @@ async function procesarYGuardarDatos(
                     where: { unidad: unidadNormalizada }
                 });
                 await db.alumno25_26.createMany({
-                    data: datosParaGuardar,
-                    skipDuplicates: true
+                    data: datosParaGuardar
                 });
             } else {
                 await db.alumno26_27.deleteMany({
                     where: { unidad: unidadNormalizada }
                 });
                 await db.alumno26_27.createMany({
-                    data: datosParaGuardar,
-                    skipDuplicates: true
+                    data: datosParaGuardar
                 });
             }
         }
@@ -903,6 +901,9 @@ async function descargarConInterceptor(
 
     if (exito) return true;
 
+    // ── PLAN B: Fetch directo al API de Innovat ──────────────────────────────
+    onStep?.({ type: 'debug', message: '🔄 Interceptor falló - activando fallback de fetch directo' });
+    
     // FIX 3.2: Detectar URL de la API dinámicamente o usar fallback v32.3.1
     let apiUrl = gralalumnosReqUrl;
     if (!apiUrl) {
