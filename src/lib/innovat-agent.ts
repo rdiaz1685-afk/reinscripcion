@@ -499,14 +499,146 @@ async function navegarAGeneralDeAlumnos(page: Page, onStep?: SyncCallback): Prom
     }
 }
 
-// ─── Body del request capturado la primera vez (para reutilizar en llamadas directas) ──
 let gralalumnosReqBody: string | null = null;
 let gralalumnosReqUrl: string | null = null;
 let gralalumnosReqHeaders: Record<string, string> = {};
 
-// ─── Descargar via interceptor O fetch directo ────────────────────────────────
+// ─── Fallback Directo (Producción) ────────────────────────────────────────
+async function ejecutarFallbackDirecto(
+    page: Page,
+    botonGenerar: ReturnType<Page['locator']>,
+    filePath: string,
+    campus: string,
+    ciclo: string,
+    onStep?: SyncCallback
+): Promise<boolean> {
+    onStep?.({ type: 'debug', message: '🔄 Ejecutando fetch directo al API de Innovat' });
+    
+    // Detectar URL de la API dinámicamente
+    const currentUrl = page.url();
+    const match = currentUrl.match(/Gaia\/([\d\.]+)/);
+    const version = match ? match[1] : '32.3.1';
+    const apiUrl = `https://innovat1.mx/Gaia/${version}/api/gralalumnos`;
+    onStep?.({ type: 'debug', message: `📡 API: ${apiUrl}` });
+
+    const templateBody = {
+        Filtro: 'Unidad', Ids: [], Estatus: 1, OptHermanos: 'TODOS',
+        Campos: [
+            { Alias: 'Matrícula', Codigo: 'A1', Seccion: 1, Columna: 1, Selected: true },
+            { Alias: 'Nombre corto', Codigo: 'A5', Seccion: 1, Columna: 2, Selected: true },
+            { Alias: 'Unidad', Codigo: 'A16', Seccion: 1, Columna: 3, Selected: true },
+            { Alias: 'Grado', Codigo: 'A8', Seccion: 1, Columna: 4, Selected: true },
+            { Alias: 'Grupo', Codigo: 'A9', Seccion: 1, Columna: 5, Selected: true },
+            { Alias: 'Estatus', Codigo: 'A10', Seccion: 1, Columna: 6, Selected: true },
+            { Alias: 'Fecha estatus', Codigo: 'A11', Seccion: 1, Columna: 7, Selected: true },
+            { Alias: 'Comentario estatus', Codigo: 'A12', Seccion: 1, Columna: 8, Selected: true }
+        ], Tipo: 'xlsx', Hermanos: 'TODOS',
+    };
+
+    const unitId = UNIT_IDS[ciclo]?.[campus];
+    if (!unitId) {
+        onStep?.({ type: 'debug', message: `❌ No se encontró unit ID para ${campus} ${ciclo}` });
+        return false;
+    }
+
+    onStep?.({ type: 'debug', message: `🔍 Unit ID ${unitId} para ${campus} ${ciclo}` });
+
+    // Hacer click en GENERAR para activar la sesión (sin esperar respuesta)
+    try {
+        await botonGenerar.click({ force: true, timeout: 5000 });
+        await page.waitForTimeout(2000);
+    } catch (e) {
+        onStep?.({ type: 'debug', message: `⚠️ Click en GENERAR: ${e}` });
+    }
+
+    const estatusValues = ciclo === '2026-2027' ? [-1, 1, 0, 2] : [1];
+
+    for (const estatusValue of estatusValues) {
+        if (estatusValues.length > 1) {
+            onStep?.({ type: 'debug', message: `🔍 Probando Estatus: ${estatusValue}` });
+        }
+
+        const scanBody = JSON.stringify({
+            ...templateBody,
+            Filtro: 'Unidad',
+            Ids: [unitId],
+            Estatus: estatusValue
+        });
+
+        let result: { status: number; text: string; method: string };
+        try {
+            result = await page.evaluate(
+                async ({ url, body }: { url: string; body: string }) => {
+                    for (const method of ['PUT', 'POST']) {
+                        try {
+                            const res = await fetch(url, {
+                                method,
+                                credentials: 'include',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Accept': 'application/json, text/plain, */*'
+                                },
+                                body,
+                            });
+                            const text = await res.text();
+                            return { status: res.status, text, method };
+                        } catch (e) {
+                            return { status: -1, text: String(e), method };
+                        }
+                    }
+                    return { status: 500, text: 'No se intentó ningún método', method: '' };
+                },
+                { url: apiUrl, body: scanBody }
+            );
+        } catch (evalError) {
+            onStep?.({ type: 'debug', message: `❌ Error en fetch: ${evalError}` });
+            continue;
+        }
+
+        if (result.status !== 200 || result.text.length < 5) {
+            const errorBody = result.text?.substring(0, 200) || '(vacío)';
+            onStep?.({ type: 'debug', message: `  Estatus ${estatusValue}: HTTP ${result.status} → ${errorBody}` });
+            continue;
+        }
+
+        let json: Record<string, unknown>[];
+        try { 
+            json = JSON.parse(result.text); 
+        } catch {
+            onStep?.({ type: 'debug', message: `  Estatus ${estatusValue}: JSON inválido` });
+            continue;
+        }
+
+        if (!Array.isArray(json) || json.length === 0) {
+            onStep?.({ type: 'debug', message: `  Estatus ${estatusValue}: respuesta vacía` });
+            continue;
+        }
+
+        onStep?.({ type: 'debug', message: `✅ ${json.length} alumnos obtenidos con Estatus ${estatusValue}` });
+        
+        // Procesar directamente en BD
+        try {
+            const guardados = await procesarYGuardarDatos(json, campus, ciclo, onStep);
+            if (guardados > 0) {
+                onStep?.({ type: 'debug', message: `✅ ${guardados} alumnos guardados en BD` });
+                await writeFile(filePath, Buffer.from('Procesado directamente en BD'));
+                return true;
+            } else {
+                onStep?.({ type: 'debug', message: `⚠️ No se guardaron registros` });
+            }
+        } catch (error) {
+            onStep?.({ type: 'debug', message: `❌ Error guardando: ${error}` });
+            onStep?.({ type: 'debug', message: `❌ Stack: ${error instanceof Error ? error.stack : 'N/A'}` });
+        }
+    }
+
+    onStep?.({ type: 'debug', message: `❌ No se encontraron datos para ${campus}` });
+    return false;
+}
+
+// ─── Descarga con Interceptor ─────────────────────────────────────────────
 // Estrategia:
-// 1. Escuchar el REQUEST a gralalumnos para capturar su body/url/headers
+// 1. Escuchar el REQUEST para capturar el body (que contiene los filtros)
 // 2. Escuchar el RESPONSE para convertir JSON → Excel
 // 3. Si el interceptor falla (rate limit), hacer fetch directo con el mismo body pero
 //    modificando el parámetro de unidad para el campus correcto
@@ -518,11 +650,11 @@ async function descargarConInterceptor(
     ciclo: string,
     onStep?: SyncCallback
 ): Promise<boolean> {
-    // En producción, ir directo al fallback (interceptor deshabilitado)
+    // En producción, ejecutar fallback directo (sin interceptor)
     const isCloudEnv = process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
     if (isCloudEnv) {
-        onStep?.({ type: 'debug', message: '⏭️ Saltando interceptor - usando fallback directo en producción' });
-        return false; // Esto activará el fallback inmediatamente
+        onStep?.({ type: 'debug', message: '⏭️ Modo producción - ejecutando fetch directo sin interceptor' });
+        return await ejecutarFallbackDirecto(page, botonGenerar, filePath, campus, ciclo, onStep);
     }
     
     // ── Intento 1: Interceptar via page.on('response') ──────────────────────
@@ -901,159 +1033,9 @@ async function descargarConInterceptor(
 
     if (exito) return true;
 
-    // ── PLAN B: Fetch directo al API de Innovat ──────────────────────────────
-    onStep?.({ type: 'debug', message: '🔄 Interceptor falló - activando fallback de fetch directo' });
-    
-    // FIX 3.2: Detectar URL de la API dinámicamente o usar fallback v32.3.1
-    let apiUrl = gralalumnosReqUrl;
-    if (!apiUrl) {
-        const currentUrl = page.url(); // Ej: https://innovat1.mx/Gaia/32.3.1/#/Inicio
-        const match = currentUrl.match(/Gaia\/([\d\.]+)/);
-        const version = match ? match[1] : '32.3.1';
-        apiUrl = `https://innovat1.mx/Gaia/${version}/api/gralalumnos`;
-        onStep?.({ type: 'debug', message: `📡 Intentando conexión directa con API v${version}...` });
-    }
-
-    // Columnas exactas que tiene MITRAS:
-    // A1: Matrícula, A5: Nombre corto, A16: Unidad, A8: Grado, A9: Grupo, A10: Estatus, A11: Fecha estatus
-    // En Plan B usaremos SIEMPRE las columnas de Mitras para garantizar estandarización
-    const templateBody = {
-        Filtro: 'Unidad', Ids: [], Estatus: 1, OptHermanos: 'TODOS',
-        Campos: [
-            { Alias: 'Matrícula', Codigo: 'A1', Seccion: 1, Columna: 1, Selected: true },
-            { Alias: 'Nombre corto', Codigo: 'A5', Seccion: 1, Columna: 2, Selected: true },
-            { Alias: 'Unidad', Codigo: 'A16', Seccion: 1, Columna: 3, Selected: true },
-            { Alias: 'Grado', Codigo: 'A8', Seccion: 1, Columna: 4, Selected: true },
-            { Alias: 'Grupo', Codigo: 'A9', Seccion: 1, Columna: 5, Selected: true },
-            { Alias: 'Estatus', Codigo: 'A10', Seccion: 1, Columna: 6, Selected: true },
-            { Alias: 'Fecha estatus', Codigo: 'A11', Seccion: 1, Columna: 7, Selected: true },
-            { Alias: 'Comentario estatus', Codigo: 'A12', Seccion: 1, Columna: 8, Selected: true }
-        ], Tipo: 'xlsx', Hermanos: 'TODOS',
-    };
-
-    // FIX: Usar el ID específico del campus y ciclo desde el mapeo de UNIT_IDS
-    const unitId = UNIT_IDS[ciclo]?.[campus];
-
-    if (!unitId) {
-        onStep?.({ type: 'debug', message: `❌ No se encontró unit ID para ${campus} ${ciclo} en el mapeo` });
-        return false;
-    }
-
-    onStep?.({ type: 'debug', message: `🔍 Usando unit ID ${unitId} para ${campus} ${ciclo}` });
-
-    // FIX 3.3: Probar múltiples valores de Estatus para ciclo 2026-2027
-    const estatusValues = ciclo === '2026-2027' ? [-1, 1, 0, 2] : [1];
-
-    try {
-        // FIX 3.3: Iterar sobre múltiples valores de Estatus
-        for (const estatusValue of estatusValues) {
-            if (estatusValues.length > 1) {
-                onStep?.({ type: 'debug', message: `🔍 Probando con Estatus: ${estatusValue}...` });
-            }
-
-            const scanBody = JSON.stringify({
-                ...templateBody,
-                Filtro: 'Unidad',
-                Ids: [unitId],
-                Estatus: estatusValue
-            });
-
-            onStep?.({ type: 'debug', message: `🌐 Ejecutando fetch desde navegador a ${apiUrl}...` });
-            let result: { status: number; text: string; method: string };
-            try {
-                result = await page.evaluate(
-                    async ({ url, body }: { url: string; body: string; reqHeaders: any }) => {
-                        // Plan B: Usar SOLO credentials: 'include' (cookies actuales del browser)
-                        // NO usar reqHeaders obsoletos — el browser tiene el token fresco
-                        for (const method of ['PUT', 'POST']) {
-                            try {
-                                const res = await fetch(url, {
-                                    method,
-                                    credentials: 'include',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'Accept': 'application/json, text/plain, */*'
-                                    },
-                                    body,
-                                });
-                                const text = await res.text();
-                                return { status: res.status, text, method };
-                            } catch (e) {
-                                return { status: -1, text: String(e), method };
-                            }
-                        }
-                        return { status: 500, text: 'No se intentó ningún método', method: '' };
-                    },
-                    { url: apiUrl, body: scanBody, reqHeaders: gralalumnosReqHeaders }
-                );
-            } catch (evalError) {
-                onStep?.({ type: 'debug', message: `❌ Error en page.evaluate: ${evalError}` });
-                continue;
-            }
-
-            if (result.status !== 200 || result.text.length < 5) {
-                // Loguear el body del error para diagnóstico
-                const errorBody = result.text?.substring(0, 300) || '(vacío)';
-                onStep?.({ type: 'debug', message: `  Estatus ${estatusValue}: HTTP ${result.status} [${(result as any).method}] → ${errorBody}` });
-                continue;
-            }
-
-            let json: Record<string, unknown>[];
-            try { json = JSON.parse(result.text); } catch {
-                onStep?.({ type: 'debug', message: `  Estatus ${estatusValue}: respuesta no es JSON válido` });
-                continue;
-            }
-
-            if (!Array.isArray(json) || json.length === 0) {
-                onStep?.({ type: 'debug', message: `  Estatus ${estatusValue}: respuesta vacía` });
-                continue;
-            }
-
-            // FIX 3.3 & 3.4: Logging mejorado con valor de Estatus
-            onStep?.({ type: 'debug', message: `✅ ${campus} = unit ID ${unitId} con Estatus ${estatusValue}` });
-            
-            // NUEVA ESTRATEGIA: En producción, procesar JSON directamente en Node.js (no en navegador)
-            const isCloudEnv = process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
-            
-            if (isCloudEnv) {
-                onStep?.({ type: 'debug', message: `📊 Procesando ${json.length} alumnos directamente en BD...` });
-                onStep?.({ type: 'debug', message: `🔍 Verificando db: ${typeof db} - ${db ? 'existe' : 'undefined'}` });
-                try {
-                    // Procesar en Node.js (aquí tenemos acceso a db)
-                    const guardados = await procesarYGuardarDatos(json, campus, ciclo, onStep);
-                    if (guardados > 0) {
-                        onStep?.({ type: 'debug', message: `✅ ${guardados} alumnos guardados en BD` });
-                        // Crear archivo vacío para que el sistema sepa que se procesó
-                        await writeFile(filePath, Buffer.from('Procesado directamente en BD'));
-                        return true;
-                    } else {
-                        onStep?.({ type: 'debug', message: `⚠️ procesarYGuardarDatos retornó 0` });
-                        return false;
-                    }
-                } catch (error) {
-                    onStep?.({ type: 'debug', message: `❌ Error en procesarYGuardarDatos: ${error}` });
-                    onStep?.({ type: 'debug', message: `❌ Stack: ${error instanceof Error ? error.stack : 'N/A'}` });
-                    return false;
-                }
-            }
-            
-            // En desarrollo, seguir generando Excel
-            const XLSX = await import('xlsx');
-            const wb = XLSX.utils.book_new();
-            const ws = XLSX.utils.json_to_sheet(json);
-            XLSX.utils.book_append_sheet(wb, ws, 'Alumnos');
-            const buffer: Buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-            await writeFile(filePath, buffer);
-            onStep?.({ type: 'debug', message: `💾 Excel: ${json.length} alumnos → ${buffer.length} bytes` });
-            return true;
-        }
-
-        onStep?.({ type: 'debug', message: `❌ No se encontraron datos para ${campus} con unit ID ${unitId}` });
-        return false;
-    } catch (e) {
-        onStep?.({ type: 'debug', message: `❌ Error en descarga: ${e}` });
-        return false;
-    }
+    // En desarrollo, si el interceptor falla, usar el mismo fallback que producción
+    onStep?.({ type: 'debug', message: '🔄 Interceptor falló - activando fallback' });
+    return await ejecutarFallbackDirecto(page, botonGenerar, filePath, campus, ciclo, onStep);
 }
 
 // ─── Agente Principal ───────────────────────────────────────────────────────
