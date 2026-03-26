@@ -565,13 +565,7 @@ async function descargarConInterceptor(
     onStep?: SyncCallback,
     unitIdCapturado?: string | null
 ): Promise<boolean> {
-    // En producción, ejecutar fallback directo (sin interceptor)
-    const isCloudEnv = process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
-    if (isCloudEnv) {
-        onStep?.({ type: 'debug', message: '⏭️ Modo producción - ejecutando fetch directo sin interceptor' });
-        return await ejecutarFallbackDirecto(page, botonGenerar, filePath, campus, ciclo, onStep, unitIdCapturado);
-    }
-    
+    // Usar siempre el interceptor - el fetch directo a API falla con HTTP 500 en Render
     // ── Intento 1: Interceptar via page.on('response') ──────────────────────
     const exito = await new Promise<boolean>(async (resolve) => {
         let capturado = false;
