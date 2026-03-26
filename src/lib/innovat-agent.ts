@@ -486,7 +486,7 @@ async function ejecutarFallbackDirecto(
         
         // Índices relativos + offset (según orden real de checkboxes marcados)
         // 2025-2026: Unidad(0), Grado(1), Grupo(2), Matrícula(3), Nombre(4)
-        // 2026-2027: Unidad(0), Grado(1), Estatus(2), Fecha Estatus(3), Matrícula(4), Nombre(5), Comentario(6)
+        // 2026-2027: Unidad(0), Grado(1), Estatus(2), Fecha Estatus(3), Comentario Estatus(4), Matrícula(5), Nombre(6)
         const columnMap: Record<string, number> = ciclo === '2025-2026' ? {
             'unidad': offset + 0,
             'grado': offset + 1,
@@ -498,9 +498,9 @@ async function ejecutarFallbackDirecto(
             'grado': offset + 1,
             'estatus': offset + 2,
             'fecha': offset + 3,
-            'matricula': offset + 4,
-            'nombre': offset + 5,
-            'comentario': offset + 6
+            'comentario': offset + 4,
+            'matricula': offset + 5,
+            'nombre': offset + 6
         };
         
         onStep?.({ type: 'debug', message: `📋 Índices de columnas (con offset ${offset}): ${JSON.stringify(columnMap)}` });
