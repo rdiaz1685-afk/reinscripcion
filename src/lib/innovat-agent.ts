@@ -474,7 +474,7 @@ async function ejecutarFallbackDirecto(
         
         onStep?.({ type: 'debug', message: `📋 Columnas detectadas: ${JSON.stringify(columnMap)}` });
         
-        // 5. Extraer todas las filas de la tabla
+        // 5. Extraer todas las filas de la tabla (estrategia chatbot: buscar por contenido)
         onStep?.({ type: 'debug', message: '📊 Extrayendo datos de la tabla...' });
         const rows = await page.locator('table tbody tr').all();
         const alumnos: Record<string, unknown>[] = [];
@@ -483,15 +483,49 @@ async function ejecutarFallbackDirecto(
             const cells = await row.locator('td').all();
             const cellTexts = await Promise.all(cells.map(c => c.innerText().catch(() => '')));
             
-            const alumno: Record<string, unknown> = {};
-            if (columnMap['matricula'] !== undefined) alumno['Matricula'] = cellTexts[columnMap['matricula']]?.trim();
-            if (columnMap['nombre'] !== undefined) alumno['Nombre'] = cellTexts[columnMap['nombre']]?.trim();
-            if (columnMap['unidad'] !== undefined) alumno['Unidad'] = cellTexts[columnMap['unidad']]?.trim();
-            if (columnMap['grado'] !== undefined) alumno['Grado'] = cellTexts[columnMap['grado']]?.trim();
-            if (columnMap['grupo'] !== undefined) alumno['Grupo'] = cellTexts[columnMap['grupo']]?.trim();
-            if (columnMap['estatus'] !== undefined) alumno['Estatus'] = cellTexts[columnMap['estatus']]?.trim();
-            if (columnMap['fecha'] !== undefined) alumno['Fecha estatus'] = cellTexts[columnMap['fecha']]?.trim();
-            if (columnMap['comentario'] !== undefined) alumno['Comentario estatus'] = cellTexts[columnMap['comentario']]?.trim();
+            // ESTRATEGIA CHATBOT: Buscar por contenido, no por índice fijo
+            // Matrícula: Solo números, 4-8 dígitos
+            const matricula = cellTexts.find(t => /^\d{4,8}$/.test(t.trim()))?.trim();
+            
+            // Nombre: Texto largo que no sea solo números ni CURP
+            const nombre = cellTexts.find(t => 
+                t.trim().length > 5 && 
+                !/^\d+$/.test(t.trim()) &&
+                !t.includes('CURP')
+            )?.trim();
+            
+            // Grado: Número de 1-2 dígitos
+            const grado = cellTexts.find(t => /^[0-9]{1,2}$/.test(t.trim()))?.trim();
+            
+            // Grupo: 1-2 letras mayúsculas
+            const grupo = cellTexts.find(t => /^[A-Z]{1,2}$/i.test(t.trim()))?.trim();
+            
+            // Estatus: Palabras clave conocidas
+            const estatus = cellTexts.find(t => {
+                const upper = t.trim().toUpperCase();
+                return upper.includes('REINSCRITO') || upper.includes('BAJA') || 
+                       upper.includes('NUEVO') || upper.includes('ACTIVO') ||
+                       upper.includes('INSCRITO');
+            })?.trim();
+            
+            // Unidad: Usar campus como fallback
+            const unidad = cellTexts.find(t => {
+                const upper = t.trim().toUpperCase();
+                return upper.includes('MITRAS') || upper.includes('CUMBRES') || 
+                       upper.includes('NORTE') || upper.includes('ANAHUAC') || 
+                       upper.includes('DOMINIO');
+            })?.trim() || campus;
+            
+            const alumno: Record<string, unknown> = {
+                'Matricula': matricula || '',
+                'Nombre': nombre || '',
+                'Unidad': unidad,
+                'Grado': grado || '',
+                'Grupo': grupo || '',
+                'Estatus': estatus || '',
+                'Fecha estatus': '',
+                'Comentario estatus': ''
+            };
             
             // Solo agregar si tiene matrícula y nombre
             if (alumno['Matricula'] && alumno['Nombre']) {
