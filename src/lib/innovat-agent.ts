@@ -571,6 +571,7 @@ async function descargarConInterceptor(
         let capturado = false;
         let yaSalido = false; // FIX: evita que el executor siga corriendo tras resolve()
         let timeoutId: ReturnType<typeof setTimeout>;
+        let internalFetchTimeout: ReturnType<typeof setTimeout>;
 
         // Capturar el REQUEST body antes de que llegue la respuesta
         const requestHandler = async (request: import('playwright').Request) => {
@@ -682,7 +683,7 @@ async function descargarConInterceptor(
         }, timeoutDuration);
 
         // Motor interno via page.evaluate - funciona en todos los entornos porque usa las cookies del browser
-        const internalFetchTimeout = setTimeout(async () => {
+        internalFetchTimeout = setTimeout(async () => {
             if (capturado || yaSalido) return;
             
             // Esperar hasta 5 segundos más si el request aún no se capturó
