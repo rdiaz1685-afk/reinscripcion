@@ -262,26 +262,39 @@ export default function Dashboard() {
   const importarDatos = async (tipo: '25-26' | '26-27') => {
     setLoading(true)
     try {
-      const res = await fetch('/api/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tipo,
-          fileName: `${tipo}.xlsx`
-        })
-      })
-      const data = await res.json()
-      if (res.ok) {
-        alert(data.message)
-        cargarImportStatus()
+      // Importar todos los campus para el ciclo especificado
+      const campus = ['DOMINIO', 'MITRAS', 'NORTE', 'CUMBRES', 'ANAHUAC'];
+      let importadosOk = 0;
+      let errores: string[] = [];
+      
+      for (const camp of campus) {
+        const fileName = `${camp}_${tipo}.xlsx`;
+        try {
+          const res = await fetch('/api/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tipo, fileName })
+          });
+          
+          if (res.ok) {
+            importadosOk++;
+          } else {
+            const data = await res.json();
+            errores.push(`${camp}: ${data.error}`);
+          }
+        } catch (error) {
+          errores.push(`${camp}: Error de red`);
+        }
+      }
+      
+      if (importadosOk > 0) {
+        alert(`✅ Importados ${importadosOk} campus correctamente${errores.length > 0 ? `\n\n⚠️ Errores:\n${errores.join('\n')}` : ''}`);
+        cargarImportStatus();
       } else {
-        const detailMsg = data.details || 'No especificados';
-        const headersMsg = data.headersFound ? `\n\nEncabezados detectados: ${data.headersFound.join(', ')}` : '';
-        const stackMsg = data.stack ? `\n\nStack:\n${data.stack.split('\n').slice(0, 5).join('\n')}` : '';
-        alert(`❌ Error: ${data.error}\n\nDetalles: ${detailMsg}${headersMsg}${stackMsg}`);
+        alert(`❌ No se pudo importar ningún campus:\n${errores.join('\n')}`);
       }
     } catch (error) {
-      console.error('Error:', error)
+      alert(`Error de red: ${error}`)
     } finally {
       setLoading(false)
     }
