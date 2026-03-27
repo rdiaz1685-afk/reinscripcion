@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GET as getMetricas } from '../../metricas/route'
-import PDFDocument from 'pdfkit'
+import { jsPDF } from 'jspdf'
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,78 +14,76 @@ export async function GET(request: NextRequest) {
 
     const data = await metricasRes.json()
 
-    // 2. Generar PDF directamente con pdfkit
-    const doc = new PDFDocument({ margin: 50 })
-    const chunks: Buffer[] = []
-
-    doc.on('data', (chunk) => chunks.push(chunk))
+    // 2. Crear PDF con jsPDF
+    const doc = new jsPDF()
     
-    const pdfPromise = new Promise<Buffer>((resolve, reject) => {
-      doc.on('end', () => resolve(Buffer.concat(chunks)))
-      doc.on('error', reject)
-    })
-
     // 3. Contenido del PDF
-    doc.fontSize(20).text('Reporte de Reinscripción por Grupo', { align: 'center' })
-    doc.moveDown()
-    doc.fontSize(12).text(`Fecha: ${new Date().toLocaleDateString('es-MX')}`, { align: 'right' })
-    doc.moveDown(2)
+    // Título
+    doc.setFontSize(20)
+    doc.text('Reporte de Reinscripción por Grupo', 105, 20, { align: 'center' })
+    
+    // Fecha
+    doc.setFontSize(10)
+    doc.text(`Fecha: ${new Date().toLocaleDateString('es-MX')}`, 200, 30, { align: 'right' })
+    
+    let yPos = 45
 
-    // Información general
+    // Campus
     if (data.unidad) {
-      doc.fontSize(14).text(`Campus: ${data.unidad}`, { underline: true })
-      doc.moveDown()
+      doc.setFontSize(14)
+      doc.text(`Campus: ${data.unidad}`, 20, yPos)
+      yPos += 10
     }
 
-    // Resumen de métricas
-    doc.fontSize(12).text('Resumen General:', { underline: true })
-    doc.moveDown(0.5)
-    doc.fontSize(10)
-    doc.text(`Total Alumnos 25-26: ${data.total25_26 || 0}`)
-    doc.text(`Total Alumnos 26-27: ${data.total26_27 || 0}`)
-    doc.text(`Total Clasificados: ${data.totalClasificados || 0}`)
-    doc.moveDown(2)
+    // Resumen
+    doc.setFontSize(12)
+    doc.text('Resumen General:', 20, yPos)
+    yPos += 7
+    
+    doc.setFontSize(10)
+    doc.text(`Total Alumnos 25-26: ${data.total25_26 || 0}`, 20, yPos)
+    yPos += 6
+    doc.text(`Total Alumnos 26-27: ${data.total26_27 || 0}`, 20, yPos)
+    yPos += 6
+    doc.text(`Total Clasificados: ${data.totalClasificados || 0}`, 20, yPos)
+    yPos += 15
 
     // Tabla de grupos
     if (data.porGrupo && data.porGrupo.length > 0) {
-      doc.fontSize(12).text('Detalle por Grupo:', { underline: true })
-      doc.moveDown(0.5)
+      doc.setFontSize(12)
+      doc.text('Detalle por Grupo:', 20, yPos)
+      yPos += 10
       
       // Encabezados
-      const startY = doc.y
-      doc.fontSize(9).font('Helvetica-Bold')
-      doc.text('Grupo', 50, startY, { width: 100, continued: true })
-      doc.text('Pendientes', 150, startY, { width: 80, continued: true })
-      doc.text('Nuevos', 230, startY, { width: 80, continued: true })
-      doc.text('Total', 310, startY, { width: 80, continued: true })
-      doc.text('Avance', 390, startY, { width: 80 })
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Grupo', 20, yPos)
+      doc.text('Pendientes', 70, yPos)
+      doc.text('Nuevos', 110, yPos)
+      doc.text('Total', 150, yPos)
+      doc.text('Avance', 180, yPos)
+      yPos += 7
       
-      doc.moveDown(0.5)
-      doc.font('Helvetica')
+      doc.setFont('helvetica', 'normal')
 
       // Datos
       data.porGrupo.forEach((grupo: any) => {
-        const y = doc.y
-        if (y > 700) {
+        if (yPos > 270) {
           doc.addPage()
+          yPos = 20
         }
         
-        doc.text(grupo.grupo || 'Sin Grupo', 50, doc.y, { width: 100, continued: true })
-        doc.text(String(grupo.pendientes || 0), 150, doc.y, { width: 80, continued: true })
-        doc.text(String(grupo.nuevos || 0), 230, doc.y, { width: 80, continued: true })
-        doc.text(String(grupo.total || 0), 310, doc.y, { width: 80, continued: true })
-        doc.text(`${grupo.avance || 0}%`, 390, doc.y, { width: 80 })
-        doc.moveDown(0.3)
+        doc.text(grupo.grupo || 'Sin Grupo', 20, yPos)
+        doc.text(String(grupo.pendientes || 0), 70, yPos)
+        doc.text(String(grupo.nuevos || 0), 110, yPos)
+        doc.text(String(grupo.total || 0), 150, yPos)
+        doc.text(`${grupo.avance || 0}%`, 180, yPos)
+        yPos += 6
       })
     }
 
-    doc.end()
-
-    // 4. Esperar a que el PDF se genere
-    const pdfBuffer = await pdfPromise
-
-    // 5. Convertir a base64 y retornar como JSON
-    const pdfBase64 = pdfBuffer.toString('base64')
+    // 4. Convertir a base64
+    const pdfBase64 = doc.output('datauristring').split(',')[1]
     
     return NextResponse.json({
       success: true,
