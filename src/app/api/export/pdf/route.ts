@@ -58,10 +58,10 @@ export async function GET(request: NextRequest) {
       doc.setFontSize(9)
       doc.setFont('helvetica', 'bold')
       doc.text('Grupo', 20, yPos)
-      doc.text('Pendientes', 70, yPos)
-      doc.text('Nuevos', 110, yPos)
-      doc.text('Total', 150, yPos)
-      doc.text('Avance', 180, yPos)
+      doc.text('Reinscritos', 60, yPos)
+      doc.text('Por Reinscribir', 100, yPos)
+      doc.text('Nuevos', 145, yPos)
+      doc.text('Total', 175, yPos)
       yPos += 7
       
       doc.setFont('helvetica', 'normal')
@@ -74,10 +74,10 @@ export async function GET(request: NextRequest) {
         }
         
         doc.text(grupo.grupo || 'Sin Grupo', 20, yPos)
-        doc.text(String(grupo.pendientes || 0), 70, yPos)
-        doc.text(String(grupo.nuevos || 0), 110, yPos)
-        doc.text(String(grupo.total || 0), 150, yPos)
-        doc.text(`${grupo.avance || 0}%`, 180, yPos)
+        doc.text(String(grupo.reinscritos || 0), 60, yPos)
+        doc.text(String(grupo.porReinscribir || 0), 100, yPos)
+        doc.text(String(grupo.nuevos || 0), 145, yPos)
+        doc.text(String(grupo.total || 0), 175, yPos)
         yPos += 6
       })
     }
