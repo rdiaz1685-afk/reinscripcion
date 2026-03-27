@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validar permisos: ADMIN_CAMPUS solo puede importar archivos de su campus
-    if (userRol === 'ADMIN_CAMPUS') {
+    if (userRol === 'ADMIN_CAMPUS' && userUnidad) {
       // El nombre del archivo debe ser CAMPUS_25-26.xlsx o CAMPUS_26-27.xlsx
       const expectedFileName = `${userUnidad}_${tipo}.xlsx`;
       if (fileName !== expectedFileName) {
