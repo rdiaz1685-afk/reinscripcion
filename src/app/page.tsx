@@ -204,6 +204,10 @@ export default function Dashboard() {
     const formData = new FormData()
     formData.append('file', selectedFile2526)
     formData.append('tipo', '25-26')
+    // Agregar campus si el usuario es ADMIN_CAMPUS
+    if (usuario?.rol === 'ADMIN_CAMPUS' && usuario.unidad) {
+      formData.append('campus', usuario.unidad)
+    }
 
     try {
       const res = await fetch('/api/upload', {
@@ -236,6 +240,10 @@ export default function Dashboard() {
     const formData = new FormData()
     formData.append('file', selectedFile2627)
     formData.append('tipo', '26-27')
+    // Agregar campus si el usuario es ADMIN_CAMPUS
+    if (usuario?.rol === 'ADMIN_CAMPUS' && usuario.unidad) {
+      formData.append('campus', usuario.unidad)
+    }
 
     try {
       const res = await fetch('/api/upload', {
@@ -262,28 +270,30 @@ export default function Dashboard() {
   const importarDatos = async (tipo: '25-26' | '26-27') => {
     setLoading(true)
     try {
-      // Importar todos los campus para el ciclo especificado
-      const campus = ['DOMINIO', 'MITRAS', 'NORTE', 'CUMBRES', 'ANAHUAC'];
+      // Determinar qué campus importar según el rol del usuario
+      const campus = usuario?.rol === 'ADMIN_CAMPUS' && usuario.unidad
+        ? [usuario.unidad] // Solo su campus
+        : ['DOMINIO', 'MITRAS', 'NORTE', 'CUMBRES', 'ANAHUAC']; // Todos los campus para DG
       let importadosOk = 0;
       let errores: string[] = [];
       
-      for (const camp of campus) {
-        const fileName = `${camp}_${tipo}.xlsx`;
+      for (const c of campus) {
         try {
+          const fileName = `${c}_${tipo}.xlsx`; // Nombre con campus: CAMPUS_25-26.xlsx
           const res = await fetch('/api/import', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tipo, fileName })
+            body: JSON.stringify({ tipo, fileName, campus: c })
           });
           
           if (res.ok) {
             importadosOk++;
           } else {
             const data = await res.json();
-            errores.push(`${camp}: ${data.error}`);
+            errores.push(`${c}: ${data.error}`);
           }
         } catch (error) {
-          errores.push(`${camp}: Error de red`);
+          errores.push(`${c}: Error de red`);
         }
       }
       
