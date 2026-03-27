@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
  * Función interna que realiza la lectura y carga de un archivo Excel a la BD
  */
 async function realizarImportacion(fileName: string, tipo: string) {
-  const uploadDir = process.env.RENDER ? '/data/upload' : process.env.RAILWAY_ENVIRONMENT ? '/app/upload' : join(process.cwd(), 'upload');
+  const uploadDir = process.env.VERCEL ? '/tmp' : process.env.RENDER ? '/data/upload' : process.env.RAILWAY_ENVIRONMENT ? '/app/upload' : join(process.cwd(), 'upload');
   const filePath = join(uploadDir, String(fileName));
 
   if (!existsSync(filePath)) {

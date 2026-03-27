@@ -639,8 +639,6 @@ async function descargarConInterceptor(
                     await new Promise(r => setTimeout(r, 200));
                     
                     const bodyString = bodyBuffer.toString('utf-8');
-                    // FIX MEMORIA: Liberar el buffer binario inmediatamente después de convertir a string
-                    (bodyBuffer as any) = null;
                     onStep?.({ type: 'debug', message: `📋 Body preview: ${bodyString.substring(0, 200)}` });
                     
                     let json: any;

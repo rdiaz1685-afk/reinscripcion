@@ -34,8 +34,8 @@ export async function POST(request: NextRequest) {
 
     // Guardar el archivo
     const fileName = `${tipo}.xlsx`;
-    // Ruta configurable: Render usa /data/upload, Railway usa /app/upload, local usa <cwd>/upload
-    const uploadDir = process.env.RENDER ? '/data/upload' : process.env.RAILWAY_ENVIRONMENT ? '/app/upload' : join(process.cwd(), 'upload');
+    // Ruta configurable: Vercel usa /tmp, Render usa /data/upload, Railway usa /app/upload, local usa <cwd>/upload
+    const uploadDir = process.env.VERCEL ? '/tmp' : process.env.RENDER ? '/data/upload' : process.env.RAILWAY_ENVIRONMENT ? '/app/upload' : join(process.cwd(), 'upload');
     const filePath = join(uploadDir, fileName);
 
     // Crear el directorio si no existe
