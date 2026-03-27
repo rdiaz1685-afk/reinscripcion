@@ -21,7 +21,6 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const tipo = formData.get('tipo') as string; // '25-26' o '26-27'
-    const campus = formData.get('campus') as string; // Campus específico para el archivo
 
     if (!file) {
       return NextResponse.json({ error: 'No se encontró ningún archivo' }, { status: 400 });
@@ -29,15 +28,6 @@ export async function POST(request: NextRequest) {
 
     if (!tipo || (tipo !== '25-26' && tipo !== '26-27')) {
       return NextResponse.json({ error: 'Tipo de archivo inválido' }, { status: 400 });
-    }
-
-    // Validar permisos: ADMIN_CAMPUS solo puede subir archivos de su campus
-    if (userRol === 'ADMIN_CAMPUS') {
-      if (!campus || campus.toUpperCase() !== userUnidad?.toUpperCase()) {
-        return NextResponse.json({ 
-          error: `Solo puedes subir archivos de tu campus (${userUnidad})` 
-        }, { status: 403 });
-      }
     }
 
     // Validar que sea un archivo Excel
@@ -56,10 +46,8 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Guardar el archivo con nombre de campus para evitar sobrescribir
-    // Formato: CAMPUS_25-26.xlsx o CAMPUS_26-27.xlsx
-    const campusName = campus || 'GENERAL';
-    const fileName = `${campusName}_${tipo}.xlsx`;
+    // Guardar el archivo con nombre genérico (como en localhost)
+    const fileName = `${tipo}.xlsx`;
     // Ruta configurable: Vercel usa /tmp, Render usa /data/upload, Railway usa /app/upload, local usa <cwd>/upload
     const uploadDir = process.env.VERCEL ? '/tmp' : process.env.RENDER ? '/data/upload' : process.env.RAILWAY_ENVIRONMENT ? '/app/upload' : join(process.cwd(), 'upload');
     const filePath = join(uploadDir, fileName);

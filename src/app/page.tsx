@@ -270,38 +270,21 @@ export default function Dashboard() {
   const importarDatos = async (tipo: '25-26' | '26-27') => {
     setLoading(true)
     try {
-      // Determinar qué campus importar según el rol del usuario
-      const campus = usuario?.rol === 'ADMIN_CAMPUS' && usuario.unidad
-        ? [usuario.unidad] // Solo su campus
-        : ['DOMINIO', 'MITRAS', 'NORTE', 'CUMBRES', 'ANAHUAC']; // Todos los campus para DG
-      let importadosOk = 0;
-      let errores: string[] = [];
+      // Importar usando nombre genérico de archivo (como en localhost)
+      const fileName = `${tipo}.xlsx`;
+      const res = await fetch('/api/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo, fileName })
+      });
       
-      for (const c of campus) {
-        try {
-          const fileName = `${c}_${tipo}.xlsx`; // Nombre con campus: CAMPUS_25-26.xlsx
-          const res = await fetch('/api/import', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tipo, fileName, campus: c })
-          });
-          
-          if (res.ok) {
-            importadosOk++;
-          } else {
-            const data = await res.json();
-            errores.push(`${c}: ${data.error}`);
-          }
-        } catch (error) {
-          errores.push(`${c}: Error de red`);
-        }
-      }
-      
-      if (importadosOk > 0) {
-        alert(`✅ Importados ${importadosOk} campus correctamente${errores.length > 0 ? `\n\n⚠️ Errores:\n${errores.join('\n')}` : ''}`);
+      if (res.ok) {
+        const data = await res.json();
+        alert(`✅ Importación exitosa\n\nRegistros importados: ${data.count || 'N/A'}`);
         cargarImportStatus();
       } else {
-        alert(`❌ No se pudo importar ningún campus:\n${errores.join('\n')}`);
+        const data = await res.json();
+        alert(`❌ Error en importación:\n${data.error || 'Error desconocido'}`);
       }
     } catch (error) {
       alert(`Error de red: ${error}`)

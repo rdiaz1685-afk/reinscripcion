@@ -174,19 +174,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Validar permisos: ADMIN_CAMPUS solo puede importar archivos de su campus
-    if (userRol === 'ADMIN_CAMPUS' && userUnidad) {
-      // El nombre del archivo debe ser CAMPUS_25-26.xlsx o CAMPUS_26-27.xlsx
-      const expectedFileName = `${userUnidad}_${tipo}.xlsx`;
-      if (fileName !== expectedFileName) {
-        return NextResponse.json({
-          error: `Solo puedes importar archivos de tu campus (${userUnidad})`,
-          details: `Archivo esperado: ${expectedFileName}`
-        }, { status: 403 });
-      }
-    }
-
-    const result = await realizarImportacion(fileName, tipo, userRol, userUnidad);
+    const result = await realizarImportacion(fileName, tipo);
     return NextResponse.json(result);
 
   } catch (error: any) {
@@ -202,7 +190,7 @@ export async function POST(request: NextRequest) {
 /**
  * Función interna que realiza la lectura y carga de un archivo Excel a la BD
  */
-async function realizarImportacion(fileName: string, tipo: string, userRol?: string, userUnidad?: string) {
+async function realizarImportacion(fileName: string, tipo: string) {
   const uploadDir = process.env.VERCEL ? '/tmp' : process.env.RENDER ? '/data/upload' : process.env.RAILWAY_ENVIRONMENT ? '/app/upload' : join(process.cwd(), 'upload');
   const filePath = join(uploadDir, String(fileName));
 
@@ -265,12 +253,6 @@ async function realizarImportacion(fileName: string, tipo: string, userRol?: str
     for (const row of rows) {
       const u = colIdx.unidad !== -1 ? String(row[colIdx.unidad] || '').trim() : '';
       const m = colIdx.matricula !== -1 ? String(row[colIdx.matricula] || '').trim() : '';
-      
-      // Filtrar por campus si es ADMIN_CAMPUS
-      if (userRol === 'ADMIN_CAMPUS' && u.toUpperCase() !== userUnidad?.toUpperCase()) {
-        continue; // Saltar filas que no son del campus del usuario
-      }
-      
       if (m) unidadesInFile.add(u);
     }
     if (unidadesInFile.size > 0) await db.alumno25_26.deleteMany({ where: { unidad: { in: Array.from(unidadesInFile) } } });
@@ -278,17 +260,9 @@ async function realizarImportacion(fileName: string, tipo: string, userRol?: str
     for (const row of rows) {
       const matricula = colIdx.matricula !== -1 ? String(row[colIdx.matricula] || '').trim() : '';
       if (!matricula) continue;
-      
-      const unidad = colIdx.unidad !== -1 ? String(row[colIdx.unidad] || '').trim() : '';
-      
-      // Filtrar por campus si es ADMIN_CAMPUS
-      if (userRol === 'ADMIN_CAMPUS' && unidad.toUpperCase() !== userUnidad?.toUpperCase()) {
-        continue; // Saltar filas que no son del campus del usuario
-      }
-      
       const studentData = {
         matricula,
-        unidad,
+        unidad: colIdx.unidad !== -1 ? String(row[colIdx.unidad] || '').trim() : '',
         grado: colIdx.grado !== -1 ? String(row[colIdx.grado] || '') : '',
         nombre: colIdx.nombre !== -1 ? String(row[colIdx.nombre] || '') : '',
         grupo: colIdx.grupo !== -1 ? String(row[colIdx.grupo] || '') : 'Sin Grupo',
@@ -303,12 +277,6 @@ async function realizarImportacion(fileName: string, tipo: string, userRol?: str
     for (const row of rows) {
       const u = colIdx.unidad !== -1 ? String(row[colIdx.unidad] || '').trim() : '';
       const m = colIdx.matricula !== -1 ? String(row[colIdx.matricula] || '').trim() : '';
-      
-      // Filtrar por campus si es ADMIN_CAMPUS
-      if (userRol === 'ADMIN_CAMPUS' && u.toUpperCase() !== userUnidad?.toUpperCase()) {
-        continue; // Saltar filas que no son del campus del usuario
-      }
-      
       if (m) unidadesInFile.add(u);
     }
     if (unidadesInFile.size > 0) await db.alumno26_27.deleteMany({ where: { unidad: { in: Array.from(unidadesInFile) } } });
@@ -316,17 +284,9 @@ async function realizarImportacion(fileName: string, tipo: string, userRol?: str
     for (const row of rows) {
       const matricula = colIdx.matricula !== -1 ? String(row[colIdx.matricula] || '').trim() : '';
       if (!matricula) continue;
-      
-      const unidad = colIdx.unidad !== -1 ? String(row[colIdx.unidad] || '').trim() : '';
-      
-      // Filtrar por campus si es ADMIN_CAMPUS
-      if (userRol === 'ADMIN_CAMPUS' && unidad.toUpperCase() !== userUnidad?.toUpperCase()) {
-        continue; // Saltar filas que no son del campus del usuario
-      }
-      
       const studentData = {
         matricula,
-        unidad,
+        unidad: colIdx.unidad !== -1 ? String(row[colIdx.unidad] || '').trim() : '',
         grado: colIdx.grado !== -1 ? String(row[colIdx.grado] || '') : '',
         nombre: colIdx.nombre !== -1 ? String(row[colIdx.nombre] || '') : '',
         estatus: colIdx.estatus !== -1 ? String(row[colIdx.estatus] || 'Pendiente') : 'Pendiente',
