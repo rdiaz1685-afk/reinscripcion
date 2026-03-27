@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GET as getMetricas } from '../../metricas/route'
-import { exec } from 'child_process'
-import { promisify } from 'util'
-import { writeFile, readFile, unlink, mkdir } from 'fs/promises'
-import path from 'path'
-import fs from 'fs'
-
-const execPromise = promisify(exec)
+import PDFDocument from 'pdfkit'
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,43 +14,77 @@ export async function GET(request: NextRequest) {
 
     const data = await metricasRes.json()
 
-    // 2. Preparar directorios temporales
-    const tmpDir = path.join(process.cwd(), 'upload', 'pdf')
+    // 2. Generar PDF directamente con pdfkit
+    const doc = new PDFDocument({ margin: 50 })
+    const chunks: Buffer[] = []
+
+    doc.on('data', (chunk) => chunks.push(chunk))
     
-    if (!fs.existsSync(tmpDir)) {
-      await mkdir(tmpDir, { recursive: true })
+    const pdfPromise = new Promise<Buffer>((resolve, reject) => {
+      doc.on('end', () => resolve(Buffer.concat(chunks)))
+      doc.on('error', reject)
+    })
+
+    // 3. Contenido del PDF
+    doc.fontSize(20).text('Reporte de Reinscripción por Grupo', { align: 'center' })
+    doc.moveDown()
+    doc.fontSize(12).text(`Fecha: ${new Date().toLocaleDateString('es-MX')}`, { align: 'right' })
+    doc.moveDown(2)
+
+    // Información general
+    if (data.unidad) {
+      doc.fontSize(14).text(`Campus: ${data.unidad}`, { underline: true })
+      doc.moveDown()
     }
 
-    const timestamp = Date.now()
-    const jsonPath = path.join(tmpDir, `data_${timestamp}.json`)
-    const pdfPath = path.join(tmpDir, `reporte_${timestamp}.pdf`)
+    // Resumen de métricas
+    doc.fontSize(12).text('Resumen General:', { underline: true })
+    doc.moveDown(0.5)
+    doc.fontSize(10)
+    doc.text(`Total Alumnos 25-26: ${data.total25_26 || 0}`)
+    doc.text(`Total Alumnos 26-27: ${data.total26_27 || 0}`)
+    doc.text(`Total Clasificados: ${data.totalClasificados || 0}`)
+    doc.moveDown(2)
 
-    // 3. Escribir JSON
-    await writeFile(jsonPath, JSON.stringify(data), 'utf-8')
+    // Tabla de grupos
+    if (data.porGrupo && data.porGrupo.length > 0) {
+      doc.fontSize(12).text('Detalle por Grupo:', { underline: true })
+      doc.moveDown(0.5)
+      
+      // Encabezados
+      const startY = doc.y
+      doc.fontSize(9).font('Helvetica-Bold')
+      doc.text('Grupo', 50, startY, { width: 100, continued: true })
+      doc.text('Pendientes', 150, startY, { width: 80, continued: true })
+      doc.text('Nuevos', 230, startY, { width: 80, continued: true })
+      doc.text('Total', 310, startY, { width: 80, continued: true })
+      doc.text('Avance', 390, startY, { width: 80 })
+      
+      doc.moveDown(0.5)
+      doc.font('Helvetica')
 
-    // 4. Ejecutar el script nativo de node aislado (bypass de webpack)
-    const scriptPath = path.join(process.cwd(), 'scripts', 'generate_report.js')
-    
-    try {
-      await execPromise(`node "${scriptPath}" "${jsonPath}" "${pdfPath}"`)
-    } catch (execError: any) {
-      console.error('Error al ejecutar node nativo:', execError)
-      return NextResponse.json(
-        { error: 'Error interno en script de node', details: execError.message || String(execError) },
-        { status: 500 }
-      )
+      // Datos
+      data.porGrupo.forEach((grupo: any) => {
+        const y = doc.y
+        if (y > 700) {
+          doc.addPage()
+        }
+        
+        doc.text(grupo.grupo || 'Sin Grupo', 50, doc.y, { width: 100, continued: true })
+        doc.text(String(grupo.pendientes || 0), 150, doc.y, { width: 80, continued: true })
+        doc.text(String(grupo.nuevos || 0), 230, doc.y, { width: 80, continued: true })
+        doc.text(String(grupo.total || 0), 310, doc.y, { width: 80, continued: true })
+        doc.text(`${grupo.avance || 0}%`, 390, doc.y, { width: 80 })
+        doc.moveDown(0.3)
+      })
     }
 
-    // 5. Leer el PDF generado
-    const pdfBuffer = await readFile(pdfPath)
+    doc.end()
 
-    // 6. Limpieza (no bloqueante)
-    Promise.all([
-      unlink(jsonPath).catch(console.error),
-      unlink(pdfPath).catch(console.error)
-    ])
+    // 4. Esperar a que el PDF se genere
+    const pdfBuffer = await pdfPromise
 
-    // 7. Retornar el PDF
+    // 5. Retornar el PDF
     return new NextResponse(pdfBuffer, {
       status: 200,
       headers: {
