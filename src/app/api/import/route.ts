@@ -155,7 +155,8 @@ export async function POST(request: NextRequest) {
 
     // CASO B: Procesar datos (Unión de tablas y clasificación)
     if (action === 'procesar') {
-      return await procesarDatos();
+      const { unidad } = body;
+      return await procesarDatos(unidad);
     }
 
     // CASO C: Reset de base de datos
@@ -304,12 +305,37 @@ async function realizarImportacion(fileName: string, tipo: string) {
   return { message: `Importados ${count} registros de ${fileName}`, unidades: Array.from(unidadesInFile), count };
 }
 
-async function procesarDatos() {
-  const alumnos25 = await db.alumno25_26.findMany();
-  const alumnos26 = await db.alumno26_27.findMany();
+async function procesarDatos(unidad?: string) {
+  const normalizeText = (text: string) =>
+    text?.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase() || "";
+
+  // Obtener todos los alumnos y filtrar en memoria si se especifica unidad
+  const allAlumnos25 = await db.alumno25_26.findMany();
+  const allAlumnos26 = await db.alumno26_27.findMany();
+
+  const alumnos25 = unidad 
+    ? allAlumnos25.filter(a => normalizeText(a.unidad) === normalizeText(unidad))
+    : allAlumnos25;
+  
+  const alumnos26 = unidad
+    ? allAlumnos26.filter(a => normalizeText(a.unidad) === normalizeText(unidad))
+    : allAlumnos26;
+
   const map26 = new Map(alumnos26.map(a => [`${a.matricula}_${a.unidad}`, a]));
 
-  await db.alumnoClasificado.deleteMany({});
+  // Solo eliminar clasificados de la unidad especificada
+  if (unidad) {
+    const allClasificados = await db.alumnoClasificado.findMany({ select: { unidad: true } });
+    const unidadesAEliminar = [...new Set(allClasificados
+      .filter(a => normalizeText(a.unidad) === normalizeText(unidad))
+      .map(a => a.unidad))];
+    if (unidadesAEliminar.length > 0) {
+      await db.alumnoClasificado.deleteMany({ where: { unidad: { in: unidadesAEliminar } } });
+    }
+  } else {
+    await db.alumnoClasificado.deleteMany({});
+  }
+  
   const insertados: any[] = [];
 
   for (const a25 of alumnos25) {

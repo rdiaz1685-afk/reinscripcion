@@ -296,10 +296,16 @@ export default function Dashboard() {
   const procesarDatos = async () => {
     setLoading(true)
     try {
+      // Determinar el campus a procesar según el usuario y la vista actual
+      const currentUnidad = usuario?.rol === 'ADMIN_CAMPUS' ? usuario.unidad : viewAsUnidad;
+      
       const res = await fetch('/api/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'procesar' })
+        body: JSON.stringify({ 
+          action: 'procesar',
+          unidad: currentUnidad // Enviar campus para procesar solo ese
+        })
       })
       const data = await res.json()
       if (res.ok) {
