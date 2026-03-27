@@ -53,13 +53,14 @@ export async function GET(request: NextRequest) {
     doc.setFont('helvetica', 'normal')
     
     // Tabla de resumen
+    const resumen = data.resumen || {}
     const resumenData = [
-      ['Total Alumnos', String(data.totalClasificados || 0)],
-      ['Reinscritos', `${data.reinscritos || 0} (${data.porcentajeReinscritos || 0}%)`],
-      ['Bajas por Transferencia', String(data.bajasTransferencia || 0)],
-      ['Bajas Reales', String(data.bajasReales || 0)],
-      ['Por Reinscribir', String(data.porReinscribir || 0)],
-      ['Nuevos', String(data.nuevos || 0)]
+      ['Total Alumnos', String(resumen.totalClasificados || 0)],
+      ['Reinscritos', `${resumen.reinscritos || 0} (${resumen.porcentajeActual || 0}%)`],
+      ['Bajas por Transferencia', String(resumen.bajasTransferencia || 0)],
+      ['Bajas Reales', String(resumen.bajasReales || 0)],
+      ['Por Reinscribir', String(resumen.porReinscribir || 0)],
+      ['Nuevos', String(resumen.nuevos || 0)]
     ]
     
     resumenData.forEach(([label, value]) => {
