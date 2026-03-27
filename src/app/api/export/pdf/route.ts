@@ -84,18 +84,17 @@ export async function GET(request: NextRequest) {
     // 4. Esperar a que el PDF se genere
     const pdfBuffer = await pdfPromise
 
-    // 5. Retornar el PDF
-    return new NextResponse(pdfBuffer, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': 'attachment; filename="Reporte_Reinscripcion_por_Grupo.pdf"',
-        'Content-Length': pdfBuffer.length.toString()
-      }
+    // 5. Convertir a base64 y retornar como JSON
+    const pdfBase64 = pdfBuffer.toString('base64')
+    
+    return NextResponse.json({
+      success: true,
+      pdf: pdfBase64,
+      filename: 'Reporte_Reinscripcion_por_Grupo.pdf'
     })
 
   } catch (error: any) {
-    console.error('Error al exportar PDF nativo aislado:', error)
+    console.error('Error al exportar PDF:', error)
     return NextResponse.json(
       { error: 'Error general al generar el PDF', details: String(error) },
       { status: 500 }

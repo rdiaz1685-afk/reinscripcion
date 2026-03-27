@@ -381,7 +381,17 @@ export default function Dashboard() {
       
       const res = await fetch(urlToFetch)
       if (res.ok) {
-        const blob = await res.blob()
+        const data = await res.json()
+        
+        // Convertir base64 a blob
+        const binaryString = window.atob(data.pdf)
+        const bytes = new Uint8Array(binaryString.length)
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i)
+        }
+        const blob = new Blob([bytes], { type: 'application/pdf' })
+        
+        // Descargar el PDF
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
