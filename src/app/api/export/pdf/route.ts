@@ -19,67 +19,118 @@ export async function GET(request: NextRequest) {
     
     // 3. Contenido del PDF
     // Título
-    doc.setFontSize(20)
+    doc.setFontSize(18)
+    doc.setTextColor(0, 51, 102) // Azul
     doc.text('Reporte de Reinscripción por Grupo', 105, 20, { align: 'center' })
     
-    // Fecha
-    doc.setFontSize(10)
-    doc.text(`Fecha: ${new Date().toLocaleDateString('es-MX')}`, 200, 30, { align: 'right' })
+    // Subtítulo con ciclo y fecha
+    doc.setFontSize(9)
+    doc.setTextColor(100, 100, 100) // Gris
+    const fechaHora = new Date().toLocaleString('es-MX', { 
+      year: 'numeric', month: 'numeric', day: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true 
+    })
+    doc.text(`Ciclo Escolar 2025-2026 - 2026-2027 | Generado: ${fechaHora}`, 105, 27, { align: 'center' })
     
-    let yPos = 45
+    let yPos = 40
 
     // Campus
     if (data.unidad) {
-      doc.setFontSize(14)
-      doc.text(`Campus: ${data.unidad}`, 20, yPos)
+      doc.setFontSize(12)
+      doc.setTextColor(0, 0, 0)
+      doc.text(`Campus: ${data.unidad.toUpperCase()}`, 20, yPos)
       yPos += 10
     }
 
-    // Resumen
-    doc.setFontSize(12)
-    doc.text('Resumen General:', 20, yPos)
-    yPos += 7
+    // Resumen General
+    doc.setFontSize(14)
+    doc.setTextColor(0, 0, 0)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Resumen General', 20, yPos)
+    yPos += 8
     
     doc.setFontSize(10)
-    doc.text(`Total Alumnos 25-26: ${data.total25_26 || 0}`, 20, yPos)
-    yPos += 6
-    doc.text(`Total Alumnos 26-27: ${data.total26_27 || 0}`, 20, yPos)
-    yPos += 6
-    doc.text(`Total Clasificados: ${data.totalClasificados || 0}`, 20, yPos)
-    yPos += 15
+    doc.setFont('helvetica', 'normal')
+    
+    // Tabla de resumen
+    const resumenData = [
+      ['Total Alumnos', String(data.totalClasificados || 0)],
+      ['Reinscritos', `${data.reinscritos || 0} (${data.porcentajeReinscritos || 0}%)`],
+      ['Bajas por Transferencia', String(data.bajasTransferencia || 0)],
+      ['Bajas Reales', String(data.bajasReales || 0)],
+      ['Por Reinscribir', String(data.porReinscribir || 0)],
+      ['Nuevos', String(data.nuevos || 0)]
+    ]
+    
+    resumenData.forEach(([label, value]) => {
+      doc.text(label, 20, yPos)
+      doc.text(value, 120, yPos, { align: 'right' })
+      yPos += 6
+    })
+    
+    yPos += 10
 
-    // Tabla de grupos
+    // Desglose por Grupo
     if (data.porGrupo && data.porGrupo.length > 0) {
-      doc.setFontSize(12)
-      doc.text('Detalle por Grupo:', 20, yPos)
-      yPos += 10
-      
-      // Encabezados
-      doc.setFontSize(9)
+      doc.setFontSize(14)
       doc.setFont('helvetica', 'bold')
-      doc.text('Grupo', 20, yPos)
-      doc.text('Reinscritos', 60, yPos)
-      doc.text('Por Reinscribir', 100, yPos)
-      doc.text('Nuevos', 145, yPos)
-      doc.text('Total', 175, yPos)
+      doc.text('Desglose por Grupo', 20, yPos)
+      yPos += 8
+      
+      // Encabezados de tabla
+      doc.setFontSize(8)
+      doc.setTextColor(255, 255, 255)
+      doc.setFillColor(0, 51, 102) // Azul oscuro
+      doc.rect(15, yPos - 4, 180, 6, 'F')
+      
+      doc.text('Grupo', 17, yPos)
+      doc.text('Total', 38, yPos)
+      doc.text('Reinsc.', 52, yPos)
+      doc.text('Transf.', 68, yPos)
+      doc.text('Bajas', 84, yPos)
+      doc.text('Pend.', 98, yPos)
+      doc.text('Nuevos', 112, yPos)
+      doc.text('T.Ef.*', 128, yPos)
+      doc.text('Avance*', 145, yPos)
+      doc.text('Meta', 165, yPos)
       yPos += 7
       
+      doc.setTextColor(0, 0, 0)
       doc.setFont('helvetica', 'normal')
 
       // Datos
-      data.porGrupo.forEach((grupo: any) => {
+      data.porGrupo.forEach((grupo: any, index: number) => {
         if (yPos > 270) {
           doc.addPage()
           yPos = 20
         }
         
-        doc.text(grupo.grupo || 'Sin Grupo', 20, yPos)
-        doc.text(String(grupo.reinscritos || 0), 60, yPos)
-        doc.text(String(grupo.porReinscribir || 0), 100, yPos)
-        doc.text(String(grupo.nuevos || 0), 145, yPos)
-        doc.text(String(grupo.total || 0), 175, yPos)
-        yPos += 6
+        // Alternar color de fondo para filas
+        if (index % 2 === 0) {
+          doc.setFillColor(245, 245, 245)
+          doc.rect(15, yPos - 4, 180, 5, 'F')
+        }
+        
+        doc.text(grupo.grupo || 'Sin Grupo', 17, yPos)
+        doc.text(String(grupo.total || 0), 38, yPos)
+        doc.text(String(grupo.reinscritos || 0), 52, yPos)
+        doc.text(String(grupo.bajasTransferencia || 0), 68, yPos)
+        doc.text(String(grupo.bajasReales || 0), 84, yPos)
+        doc.text(String(grupo.porReinscribir || 0), 98, yPos)
+        doc.text(String(grupo.nuevos || 0), 112, yPos)
+        doc.text(String(grupo.totalEfectivo || 0), 128, yPos)
+        doc.text(`${grupo.porcentaje || 0}%`, 145, yPos)
+        doc.text(String(grupo.meta || 0), 165, yPos)
+        yPos += 5
       })
+      
+      // Nota al pie
+      yPos += 5
+      doc.setFontSize(7)
+      doc.setTextColor(100, 100, 100)
+      doc.text('* Total Efectivo = Total Inicial - Transferencias. El Avance se calcula sobre el Total Efectivo,', 20, yPos)
+      yPos += 3
+      doc.text('descontando las transferencias del denominador (criterio autorizado por Dirección Administrativa).', 20, yPos)
     }
 
     // 4. Convertir a base64
