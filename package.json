@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
-    "start": "prisma db push --accept-data-loss && next start",
+    "start": "prisma db push --accept-data-loss && node --expose-gc node_modules/.bin/next start",
     "postinstall": "npx playwright install chromium",
     "lint": "eslint .",
     "test": "playwright test",

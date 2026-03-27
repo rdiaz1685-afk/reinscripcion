@@ -630,27 +630,13 @@ async function descargarConInterceptor(
                     const bodyBuffer = await response.body().catch(() => Buffer.from(''));
                     onStep?.({ type: 'debug', message: `📡 Datos recibidos: ${(bodyBuffer.length / 1024).toFixed(1)} KB` });
 
-                    if (bodyBuffer.length < 10) {
-                        onStep?.({ type: 'debug', message: `⚠️ Body vacío o muy corto (${bodyBuffer.length} bytes), ignorando` });
-                        return;
-                    }
+                    if (bodyBuffer.length < 10) return;
 
                     // Pequeña pausa para permitir que el event loop de NodeJS procese logs y no muera por OOM
                     await new Promise(r => setTimeout(r, 200));
                     
                     const bodyString = bodyBuffer.toString('utf-8');
-                    // FIX MEMORIA: Liberar el buffer binario inmediatamente después de convertir a string
-                    (bodyBuffer as any) = null;
-                    onStep?.({ type: 'debug', message: `📋 Body preview: ${bodyString.substring(0, 200)}` });
-                    
-                    let json: any;
-                    try {
-                        json = JSON.parse(bodyString);
-                    } catch (parseErr) {
-                        onStep?.({ type: 'debug', message: `❌ JSON inválido: ${parseErr}` });
-                        return;
-                    }
-                    onStep?.({ type: 'debug', message: `📋 Tipo de respuesta: ${Array.isArray(json) ? `array[${json.length}]` : typeof json} keys=${Array.isArray(json) ? 'N/A' : Object.keys(json||{}).join(',')}` });
+                    const json = JSON.parse(bodyString);
                     const result = Array.isArray(json) ? json : (json.data || json.items || []);
 
                     if (Array.isArray(result) && result.length > 0) {
@@ -671,8 +657,6 @@ async function descargarConInterceptor(
                         page.off('request', requestHandler);
                         await writeFile(filePath, buffer);
                         onStep?.({ type: 'debug', message: `💾 Excel: ${result.length} alumnos → ${buffer.length} bytes` });
-                        // FIX MEMORIA: Liberar referencias grandes inmediatamente
-                        json = null;
                         resolve(true);
                     } else {
                         onStep?.({ type: 'debug', message: `ℹ️ JSON recibido pero no contiene una lista válida: ${JSON.stringify(json || {}).substring(0, 100)}` });
@@ -754,20 +738,7 @@ async function descargarConInterceptor(
                 ], Tipo: 'xlsx', Hermanos: 'TODOS',
             };
             
-            // Sanitizar el body: Estatus debe ser siempre número entero (no string)
-            // AngularJS puede enviar "-1" como string, lo que hace que Innovat no responda
-            let bodyToUse: string;
-            try {
-                const rawBody = gralalumnosReqBody || JSON.stringify(templateBody);
-                const parsedBody = JSON.parse(rawBody);
-                if (typeof parsedBody.Estatus === 'string') {
-                    parsedBody.Estatus = parseInt(parsedBody.Estatus, 10);
-                    onStep?.({ type: 'debug', message: `🔧 Estatus corregido: "${parsedBody.Estatus}" → ${parsedBody.Estatus} (número)` });
-                }
-                bodyToUse = JSON.stringify(parsedBody);
-            } catch {
-                bodyToUse = gralalumnosReqBody || JSON.stringify(templateBody);
-            }
+            const bodyToUse = gralalumnosReqBody || JSON.stringify(templateBody);
             
             onStep?.({ type: 'debug', message: `📤 Fetch URL: ${apiUrlFallback}` });
             onStep?.({ type: 'debug', message: `📤 Body preview: ${bodyToUse.substring(0, 100)}...` });
@@ -852,8 +823,6 @@ async function descargarConInterceptor(
                     clearTimeout(timeoutId);
                     await writeFile(filePath, buffer);
                     onStep?.({ type: 'debug', message: `💾 Excel guardado: ${buffer.length} bytes` });
-                    // FIX MEMORIA: Liberar datos grandes
-                    allData.length = 0;
                     resolve(true);
                 } else if (result?.error) {
                     onStep?.({ type: 'debug', message: `⚠️ Falló extracción interna: ${result.error}` });
@@ -985,72 +954,83 @@ export async function syncFromInnovat(
     let browser: Browser | null = null;
 
     try {
-        // FIX MEMORIA: Forzar GC de Node.js antes de lanzar el browser
-        if (global.gc) {
-            global.gc();
-            onStep?.({ type: 'debug', message: '🧹 GC manual ejecutado antes de lanzar browser' });
-        }
-
         browser = await chromium.launch({
-            headless: true, // Siempre headless en producción para ahorrar memoria
+            headless: process.env.NODE_ENV === 'production',
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',       // Usar /tmp en vez de /dev/shm (más RAM en Render)
+                '--disable-dev-shm-usage',
                 '--disable-gpu',
                 '--disable-animations',
+                // Configuración adicional para Render y entornos cloud
                 '--disable-blink-features=AutomationControlled',
-                // CRÍTICO: NO usar --single-process (causa crashes y más consumo de memoria)
-                // CRÍTICO: NO usar --memory-pressure-off (contraproducente, bloquea el GC)
-                '--disable-background-networking',
-                '--disable-background-timer-throttling',
-                '--disable-backgrounding-occluded-windows',
-                '--disable-breakpad',
-                '--disable-component-extensions-with-background-pages',
-                '--disable-extensions',
-                '--disable-features=TranslateUI,VizDisplayCompositor,IsolateOrigins,site-per-process',
-                '--disable-ipc-flooding-protection',
-                '--disable-renderer-backgrounding',
-                '--disable-hang-monitor',
-                '--disable-prompt-on-repost',
-                '--disable-sync',
-                '--disable-translate',
-                '--disable-domain-reliability',
-                '--disable-client-side-phishing-detection',
-                '--disable-software-rasterizer',
-                '--disable-canvas-aa',
-                '--disable-2d-canvas-clip-aa',
-                '--disable-gl-drawing-for-tests',
+                '--disable-features=IsolateOrigins,site-per-process',
                 '--disable-web-security',
-                '--no-first-run',
-                '--metrics-recording-only',
-                '--force-color-profile=srgb',
-                '--enable-features=NetworkService,NetworkServiceInProcess',
-                // Limitar procesos de renderer a 1 (ahorra ~100MB por campus adicional)
-                '--renderer-process-limit=1',
-                // FIX: Limitar memoria del proceso de JS del renderer
-                '--js-flags=--max-old-space-size=256 --expose-gc',
+                '--disable-features=VizDisplayCompositor',
+                // Optimizaciones agresivas de memoria para Render
+                ...(process.env.RENDER_ENVIRONMENT ? [
+                    '--single-process',
+                    '--disable-background-networking',
+                    '--disable-background-timer-throttling',
+                    '--disable-backgrounding-occluded-windows',
+                    '--disable-breakpad',
+                    '--disable-component-extensions-with-background-pages',
+                    '--disable-extensions',
+                    '--disable-features=TranslateUI',
+                    '--disable-ipc-flooding-protection',
+                    '--disable-renderer-backgrounding',
+                    '--enable-features=NetworkService,NetworkServiceInProcess',
+                    '--force-color-profile=srgb',
+                    '--metrics-recording-only',
+                    '--no-first-run',
+                    '--disable-hang-monitor',
+                    '--disable-prompt-on-repost',
+                    '--disable-sync',
+                    '--disable-translate',
+                    '--disable-domain-reliability',
+                    '--disable-client-side-phishing-detection',
+                    '--memory-pressure-off',
+                    // Límites de memoria explícitos
+                    '--max-old-space-size=512',
+                    '--js-flags=--max-old-space-size=512',
+                    '--disable-software-rasterizer',
+                    '--disable-canvas-aa',
+                    '--disable-2d-canvas-clip-aa',
+                    '--disable-gl-drawing-for-tests'
+                ] : [])
             ],
         });
 
         const context = await browser.newContext({
             acceptDownloads: true,
-            viewport: { width: 800, height: 600 },  // FIX MEMORIA: viewport mínimo funcional
+            viewport: { width: 1280, height: 720 },  // Reducido para ahorrar memoria en Render
+            // Deshabilitar JavaScript innecesario para reducir memoria
             javaScriptEnabled: true, // Necesario para AngularJS
         });
 
-        // ── OPTIMIZACIÓN: Bloquear recursos innecesarios ──
+        // ── OPTIMIZACIÓN: Bloquear recursos innecesarios (imágenes, fuentes) ──
         await context.route('**/*', (route) => {
             const request = route.request();
             const type = request.resourceType();
-            const url = request.url();
-            // Bloquear todo lo que no sea necesario para el scraping
-            if (['image', 'media', 'font', 'websocket', 'eventsource', 'manifest'].includes(type)
-                || url.includes('google-analytics')
-                || url.includes('googleapis.com/fonts')
-                || url.includes('hotjar')
-                || url.includes('intercom')) {
+            // No bloqueamos 'stylesheet' porque AngularJS podría depender de elementos visibles (layout) para clics
+            if (['image', 'media', 'font'].includes(type) || request.url().includes('google-analytics')) {
                 route.abort();
+            } else if (request.url().includes('gralalumnos') && request.method() === 'PUT') {
+                // FIX CRÍTICO: Innovat requiere Estatus como número entero.
+                // AngularJS serializa el valor del radio button "Ambos" como string "-1".
+                // Lo corregimos antes de que el request llegue al servidor.
+                try {
+                    const body = request.postData();
+                    if (body) {
+                        const parsed = JSON.parse(body);
+                        if (typeof parsed.Estatus === 'string') {
+                            parsed.Estatus = parseInt(parsed.Estatus, 10);
+                            route.continue({ postData: JSON.stringify(parsed) });
+                            return;
+                        }
+                    }
+                } catch { }
+                route.continue();
             } else {
                 route.continue();
             }
@@ -1133,22 +1113,16 @@ export async function syncFromInnovat(
                         delete (window as any).__innovatData;
                     }).catch(() => {});
 
-                    // FIX MEMORIA: Limpiar buffers y forzar GC entre cada campus/ciclo
                     if (!esPrimeraCombinacion) {
                         onStep?.({ type: 'debug', message: `♻️ Página limpia para ${campus} ${ciclo}... (Soft reload)` });
                         try {
-                            // Limpiar datos del ciclo anterior de window
+                            // Cambiamos el hash de Angular suavemente para forzar que el router se limpie
+                            // sin necesidad de refrescar todo el navegador (que causa pérdida de sesión)
                             await page.evaluate(() => {
                                 delete (window as any).__innovatData;
-                                // Limpiar cualquier referencia grande en memoria
-                                if (typeof (window as any).gc === 'function') {
-                                    (window as any).gc();
-                                }
                                 window.location.hash = '/Inicio';
                             });
                             await page.waitForTimeout(2000);
-                            // FIX MEMORIA: Forzar GC de Node.js entre campus
-                            if (global.gc) global.gc();
                         } catch (e) {
                             onStep?.({ type: 'debug', message: `⚠️ Error en soft reload: ${e}` });
                         }
@@ -1227,13 +1201,17 @@ export async function syncFromInnovat(
                         try {
                             onStep?.({ type: 'debug', message: '🔘 Buscando botón radio "Ambos" para ciclo 2026-2027...' });
 
+                            // Para iCheck, necesitamos hacer click en el elemento <ins> que intercepta los clicks
+                            // Buscar el label "Ambos" y luego el ins helper
                             const labelAmbos = page.locator('label').filter({ hasText: /^Ambos$/i }).first();
 
                             if (await labelAmbos.isVisible().catch(() => false)) {
+                                // Hacer click directamente en el label (iCheck lo maneja)
                                 onStep?.({ type: 'debug', message: '✅ Seleccionando "Ambos"...' });
                                 await labelAmbos.click({ force: true });
                                 await page.waitForTimeout(500);
                             } else {
+                                // Fallback: buscar el ins.iCheck-helper directamente
                                 const insHelper = page.locator('.iCheck-helper').first();
                                 if (await insHelper.isVisible({ timeout: 1000 })) {
                                     await insHelper.click({ force: true });
@@ -1365,24 +1343,11 @@ export async function syncFromInnovat(
                         await page.waitForTimeout(tiempoEsperaFormulario);
                     }
 
-                    // ── 2e. Descargar datos
+                    // ── 2e. Descargar Excel usando interceptor
                     const fileName = campusNombreArchivo(campus, ciclo);
                     const filePath = join(uploadDir, fileName);
 
-                    // Para 2026-2027 en producción: el interceptor no puede capturar el body
-                    // (Innovat responde en modo streaming/chunked). Usamos fallback directo.
-                    const isCloudEnv = !!(process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production');
-                    let descargado = false;
-
-                    if (ciclo === '2026-2027' && isCloudEnv) {
-                        onStep?.({ type: 'debug', message: `🎯 2026-2027 en cloud: usando fetch directo via browser context` });
-                        // Hacer click primero para que Innovat registre la sesión, luego fetch directo
-                        await botonGenerar.click({ force: true }).catch(() => {});
-                        await page.waitForTimeout(2000);
-                        descargado = await ejecutarFallbackDirecto(page, botonGenerar, filePath, campus, ciclo, onStep, null);
-                    } else {
-                        descargado = await descargarConInterceptor(page, botonGenerar, filePath, campus, ciclo, onStep, null);
-                    }
+                    const descargado = await descargarConInterceptor(page, botonGenerar, filePath, campus, ciclo, onStep, null);
 
                     if (descargado) {
                         downloadedFiles.push(fileName);
