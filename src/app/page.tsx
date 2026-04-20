@@ -128,8 +128,45 @@ export default function Dashboard() {
   const usuario = session?.user as Usuario | undefined
   const [generalData, setGeneralData] = useState<any>(null)
   const [mesActual, setMesActual] = useState(new Date().getMonth() + 1)
+  const [mostrarAlertaSnapshot, setMostrarAlertaSnapshot] = useState(false)
+  const [snapshotGuardado, setSnapshotGuardado] = useState(false)
 
   const campuses = ['Mitras', 'Cumbres', 'Norte', 'Dominio', 'Anáhuac']
+
+  // Verificar si es fin de mes y si ya se guardó el snapshot
+  useEffect(() => {
+    const verificarFinDeMes = async () => {
+      const hoy = new Date()
+      const dia = hoy.getDate()
+      const ultimoDiaDelMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate()
+      
+      // Mostrar alerta los últimos 3 días del mes
+      if (dia >= ultimoDiaDelMes - 2) {
+        // Verificar si ya existe snapshot del mes actual
+        try {
+          const currentUnidad = usuario?.rol === 'ADMIN_CAMPUS' ? usuario.unidad : campusSeleccionado
+          const res = await fetch(`/api/snapshot?unidad=${currentUnidad}&mes=${hoy.getMonth() + 1}&anio=${hoy.getFullYear()}`)
+          const data = await res.json()
+          
+          if (data.snapshots && data.snapshots.length > 0) {
+            setSnapshotGuardado(true)
+            setMostrarAlertaSnapshot(false)
+          } else {
+            setSnapshotGuardado(false)
+            setMostrarAlertaSnapshot(true)
+          }
+        } catch (error) {
+          console.error('Error verificando snapshot:', error)
+        }
+      } else {
+        setMostrarAlertaSnapshot(false)
+      }
+    }
+
+    if (usuario) {
+      verificarFinDeMes()
+    }
+  }, [usuario, campusSeleccionado])
 
   useEffect(() => {
     if (usuario) {
@@ -574,6 +611,36 @@ export default function Dashboard() {
                 <AlertTitle>Configuración necesaria</AlertTitle>
                 <AlertDescription>
                   Por favor, vaya a la pestaña &quot;Config&quot; para subir los archivos Excel y procesar los datos.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Alerta de fin de mes */}
+            {mostrarAlertaSnapshot && !snapshotGuardado && (
+              <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950/20">
+                <Calendar className="h-4 w-4 text-blue-500" />
+                <AlertTitle>📅 Recordatorio de Fin de Mes</AlertTitle>
+                <AlertDescription className="flex flex-col gap-2">
+                  <p>
+                    Estamos en los últimos días del mes. No olvides guardar el snapshot mensual para registrar el avance y comparar con las metas.
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={() => setActiveTab('config')}
+                    className="bg-blue-500 hover:bg-blue-600 w-fit"
+                  >
+                    Ir a Config para guardar snapshot
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {snapshotGuardado && (
+              <Alert className="border-green-200 bg-green-50 dark:bg-green-950/20">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                <AlertTitle>✅ Snapshot del mes guardado</AlertTitle>
+                <AlertDescription>
+                  El snapshot de {new Date().toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })} ya fue guardado correctamente.
                 </AlertDescription>
               </Alert>
             )}
@@ -1457,6 +1524,8 @@ export default function Dashboard() {
                             const data = await res.json();
                             if (res.ok) {
                               alert(`✅ Snapshot guardado: ${data.fecha}\n${data.grupos} grupos procesados`);
+                              setSnapshotGuardado(true);
+                              setMostrarAlertaSnapshot(false);
                             } else {
                               alert(`❌ Error: ${data.error}`);
                             }
