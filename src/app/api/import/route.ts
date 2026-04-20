@@ -336,13 +336,15 @@ async function procesarDatos(unidad?: string) {
     await db.alumnoClasificado.deleteMany({});
   }
   
-  const insertados: any[] = [];
+  // Preparar todos los registros en memoria primero
+  const todosLosRegistros: any[] = [];
 
+  // Procesar alumnos de 25-26
   for (const a25 of alumnos25) {
     const key = `${a25.matricula}_${a25.unidad}`;
     const a26 = map26.get(key);
 
-    const data = {
+    todosLosRegistros.push({
       matricula: a25.matricula,
       nombre: a25.nombre,
       grupo: a25.grupo,
@@ -352,24 +354,14 @@ async function procesarDatos(unidad?: string) {
       fechaEstatus: a26?.fechaEstatus || null,
       comentario: a26?.comentario || '',
       clasificacion: clasificarAlumno(a26?.estatus || '', a26?.comentario || '', false)
-    };
-
-    try {
-      await (db.alumnoClasificado as any).upsert({
-        where: { matricula_unidad: { matricula: data.matricula, unidad: data.unidad } },
-        update: data,
-        create: data
-      });
-      insertados.push(data);
-    } catch (err: any) {
-      console.error(`Error procesando a25 ${data.matricula}:`, err);
-    }
+    });
   }
 
+  // Procesar alumnos nuevos de 26-27
   const map25Keys = new Set(alumnos25.map(a => `${a.matricula}_${a.unidad}`));
   for (const a26 of alumnos26) {
     if (!map25Keys.has(`${a26.matricula}_${a26.unidad}`)) {
-      const data = {
+      todosLosRegistros.push({
         matricula: a26.matricula,
         nombre: a26.nombre,
         grupo: 'Nuevo Ingreso',
@@ -379,20 +371,18 @@ async function procesarDatos(unidad?: string) {
         fechaEstatus: a26.fechaEstatus,
         comentario: a26.comentario,
         clasificacion: clasificarAlumno(a26.estatus, a26.comentario, true)
-      };
-
-      try {
-        await (db.alumnoClasificado as any).upsert({
-          where: { matricula_unidad: { matricula: data.matricula, unidad: data.unidad } },
-          update: data,
-          create: data
-        });
-        insertados.push(data);
-      } catch (err: any) {
-        console.error(`Error procesando a26 ${data.matricula}:`, err);
-      }
+      });
     }
   }
+
+  // Insertar todos en una sola operación batch (mucho más rápido)
+  if (todosLosRegistros.length > 0) {
+    await db.alumnoClasificado.createMany({
+      data: todosLosRegistros
+    });
+  }
+
+  const insertados = todosLosRegistros;
 
   return NextResponse.json({ message: 'Procesado completo', total: insertados.length });
 }
