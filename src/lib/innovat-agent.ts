@@ -1383,7 +1383,7 @@ export async function syncFromInnovat(
                     }
 
                     if (descargado) {
-                        downloadedFiles.push(fileName);
+                        downloadedFiles.push(filePath);
                         onStep?.({ type: 'downloaded', campus, ciclo, path: filePath });
                     } else {
                         // Si el interceptor falló, guardar HTML para investigar
