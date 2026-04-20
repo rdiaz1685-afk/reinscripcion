@@ -78,7 +78,6 @@ model AlumnoClasificado {
 
 // Histórico de métricas para el dashboard general
 model SnapshotMetricas {
-
   id                String   @id @default(cuid())
   fecha             DateTime @default(now())
   unidad            String   // "Global" o nombre del Campus (Unidad)
@@ -92,6 +91,59 @@ model SnapshotMetricas {
   meta              Int
   porcentajeCumplimiento Float
   createdAt         DateTime @default(now())
+}
+
+// Snapshot mensual por campus (para histórico)
+model SnapshotMensual {
+  id                      String   @id @default(cuid())
+  anio                    Int      // 2026
+  mes                     Int      // 1-12 (1=Enero, 12=Diciembre)
+  unidad                  String   // Nombre del campus
+  totalAlumnos            Int
+  reinscritos             Int
+  bajasTransferencia      Int
+  bajasReales             Int
+  porReinscribir          Int
+  nuevos                  Int
+  porcentajeReinscritos   Float
+  metaMes                 Float    // Meta del mes (ej: 65 para 65%)
+  porcentajeCumplimiento  Float    // % de cumplimiento vs meta
+  createdAt               DateTime @default(now())
+  
+  @@unique([anio, mes, unidad], name: "snapshot_mensual_unique")
+}
+
+// Snapshot mensual por grupo (detalle para coordinadoras)
+model SnapshotGrupo {
+  id                    String   @id @default(cuid())
+  anio                  Int
+  mes                   Int
+  unidad                String
+  grupo                 String
+  coordinadora          String?  // Nombre de la coordinadora
+  totalAlumnos          Int
+  reinscritos           Int
+  bajasTransferencia    Int
+  bajasReales           Int
+  porReinscribir        Int
+  nuevos                Int
+  porcentajeReinscritos Float
+  createdAt             DateTime @default(now())
+  
+  @@unique([anio, mes, unidad, grupo], name: "snapshot_grupo_unique")
+}
+
+// Coordinadoras por campus
+model Coordinadora {
+  id        String   @id @default(cuid())
+  nombre    String
+  unidad    String   // Campus asignado
+  grupos    String   // Lista de grupos separados por coma (ej: "1PAMI,1PBMI,2PAMI")
+  activa    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([nombre, unidad], name: "coordinadora_unidad_unique")
 }
 // Usuarios y Roles
 model Usuario {
