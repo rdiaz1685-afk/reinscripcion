@@ -987,6 +987,10 @@ export async function syncFromInnovat(
         const isVercel = process.env.VERCEL === '1' || process.env.VERCEL_ENV;
         const browserlessToken = process.env.BROWSERLESS_TOKEN;
 
+        // Debug: mostrar estado de variables de entorno
+        onStep?.({ type: 'debug', message: `🔍 Debug: VERCEL=${process.env.VERCEL}, VERCEL_ENV=${process.env.VERCEL_ENV}` });
+        onStep?.({ type: 'debug', message: `🔍 Debug: BROWSERLESS_TOKEN=${browserlessToken ? 'Presente ✅' : 'Ausente ❌'}` });
+
         // Si hay token de Browserless, usarlo (independientemente del entorno)
         if (browserlessToken) {
             // Conectar a Browserless
