@@ -128,45 +128,8 @@ export default function Dashboard() {
   const usuario = session?.user as Usuario | undefined
   const [generalData, setGeneralData] = useState<any>(null)
   const [mesActual, setMesActual] = useState(new Date().getMonth() + 1)
-  const [mostrarAlertaSnapshot, setMostrarAlertaSnapshot] = useState(false)
-  const [snapshotGuardado, setSnapshotGuardado] = useState(false)
 
   const campuses = ['Mitras', 'Cumbres', 'Norte', 'Dominio', 'Anáhuac']
-
-  // Verificar si es fin de mes y si ya se guardó el snapshot
-  useEffect(() => {
-    const verificarFinDeMes = async () => {
-      const hoy = new Date()
-      const dia = hoy.getDate()
-      const ultimoDiaDelMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate()
-      
-      // Mostrar alerta los últimos 3 días del mes
-      if (dia >= ultimoDiaDelMes - 2) {
-        // Verificar si ya existe snapshot del mes actual
-        try {
-          const currentUnidad = usuario?.rol === 'ADMIN_CAMPUS' ? usuario.unidad : viewAsUnidad
-          const res = await fetch(`/api/snapshot?unidad=${currentUnidad}&mes=${hoy.getMonth() + 1}&anio=${hoy.getFullYear()}`)
-          const data = await res.json()
-          
-          if (data.snapshots && data.snapshots.length > 0) {
-            setSnapshotGuardado(true)
-            setMostrarAlertaSnapshot(false)
-          } else {
-            setSnapshotGuardado(false)
-            setMostrarAlertaSnapshot(true)
-          }
-        } catch (error) {
-          console.error('Error verificando snapshot:', error)
-        }
-      } else {
-        setMostrarAlertaSnapshot(false)
-      }
-    }
-
-    if (usuario) {
-      verificarFinDeMes()
-    }
-  }, [usuario, viewAsUnidad])
 
   useEffect(() => {
     if (usuario) {
@@ -611,36 +574,6 @@ export default function Dashboard() {
                 <AlertTitle>Configuración necesaria</AlertTitle>
                 <AlertDescription>
                   Por favor, vaya a la pestaña &quot;Config&quot; para subir los archivos Excel y procesar los datos.
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {/* Alerta de fin de mes */}
-            {mostrarAlertaSnapshot && !snapshotGuardado && (
-              <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950/20">
-                <Calendar className="h-4 w-4 text-blue-500" />
-                <AlertTitle>📅 Recordatorio de Fin de Mes</AlertTitle>
-                <AlertDescription className="flex flex-col gap-2">
-                  <p>
-                    Estamos en los últimos días del mes. No olvides guardar el snapshot mensual para registrar el avance y comparar con las metas.
-                  </p>
-                  <Button
-                    size="sm"
-                    onClick={() => setActiveTab('config')}
-                    className="bg-blue-500 hover:bg-blue-600 w-fit"
-                  >
-                    Ir a Config para guardar snapshot
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {snapshotGuardado && (
-              <Alert className="border-green-200 bg-green-50 dark:bg-green-950/20">
-                <CheckCircle className="h-4 w-4 text-green-500" />
-                <AlertTitle>✅ Snapshot del mes guardado</AlertTitle>
-                <AlertDescription>
-                  El snapshot de {new Date().toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })} ya fue guardado correctamente.
                 </AlertDescription>
               </Alert>
             )}
@@ -1503,50 +1436,6 @@ export default function Dashboard() {
                         <ArrowRightLeft className="h-4 w-4 mr-2" />
                       )}
                       Procesar y Clasificar
-                    </Button>
-
-                    {/* Botón Guardar Snapshot Mensual */}
-                    <Button
-                      onClick={async () => {
-                        if (confirm('¿Guardar snapshot mensual de las métricas actuales?')) {
-                          setLoading(true);
-                          try {
-                            const now = new Date();
-                            const currentUnidad = usuario?.rol === 'ADMIN_CAMPUS' ? usuario.unidad : viewAsUnidad;
-                            const res = await fetch('/api/snapshot', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                unidad: currentUnidad,
-                                mes: now.getMonth() + 1,
-                                anio: now.getFullYear()
-                              })
-                            });
-                            const data = await res.json();
-                            if (res.ok) {
-                              alert(`✅ Snapshot guardado: ${data.fecha}\n${data.grupos} grupos procesados`);
-                              setSnapshotGuardado(true);
-                              setMostrarAlertaSnapshot(false);
-                            } else {
-                              alert(`❌ Error: ${data.error}`);
-                            }
-                          } catch (err) {
-                            alert('❌ Error guardando snapshot');
-                          }
-                          setLoading(false);
-                        }
-                      }}
-                      disabled={loading || !importStatus || importStatus.clasificados === 0}
-                      className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600"
-                    >
-                      {loading ? (
-                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                        </svg>
-                      )}
-                      Guardar Snapshot Mensual
                     </Button>
 
                     {/* Botón Peligroso: Reset */}
