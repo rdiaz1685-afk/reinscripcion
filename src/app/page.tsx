@@ -144,7 +144,7 @@ export default function Dashboard() {
       if (dia >= ultimoDiaDelMes - 2) {
         // Verificar si ya existe snapshot del mes actual
         try {
-          const currentUnidad = usuario?.rol === 'ADMIN_CAMPUS' ? usuario.unidad : campusSeleccionado
+          const currentUnidad = usuario?.rol === 'ADMIN_CAMPUS' ? usuario.unidad : viewAsUnidad
           const res = await fetch(`/api/snapshot?unidad=${currentUnidad}&mes=${hoy.getMonth() + 1}&anio=${hoy.getFullYear()}`)
           const data = await res.json()
           
@@ -166,7 +166,7 @@ export default function Dashboard() {
     if (usuario) {
       verificarFinDeMes()
     }
-  }, [usuario, campusSeleccionado])
+  }, [usuario, viewAsUnidad])
 
   useEffect(() => {
     if (usuario) {
@@ -1512,11 +1512,12 @@ export default function Dashboard() {
                           setLoading(true);
                           try {
                             const now = new Date();
+                            const currentUnidad = usuario?.rol === 'ADMIN_CAMPUS' ? usuario.unidad : viewAsUnidad;
                             const res = await fetch('/api/snapshot', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({
-                                unidad: campusSeleccionado === 'Global' ? undefined : campusSeleccionado,
+                                unidad: currentUnidad,
                                 mes: now.getMonth() + 1,
                                 anio: now.getFullYear()
                               })
