@@ -983,17 +983,23 @@ export async function syncFromInnovat(
     let browser: Browser | null = null;
 
     try {
-        // Detectar si estamos en Vercel y usar Browserless
-        const isVercel = process.env.VERCEL === '1';
+        // Detectar si estamos en Vercel o si hay token de Browserless
+        const isVercel = process.env.VERCEL === '1' || process.env.VERCEL_ENV;
         const browserlessToken = process.env.BROWSERLESS_TOKEN;
 
-        if (isVercel && browserlessToken) {
-            // Conectar a Browserless en Vercel
+        // Si hay token de Browserless, usarlo (independientemente del entorno)
+        if (browserlessToken) {
+            // Conectar a Browserless
             const browserlessUrl = `wss://chrome.browserless.io?token=${browserlessToken}`;
-            onStep?.({ type: 'debug', message: '🌐 Conectando a Browserless (Vercel)...' });
+            onStep?.({ type: 'debug', message: `🌐 Conectando a Browserless... (Vercel: ${isVercel ? 'Sí' : 'No'})` });
             
-            browser = await chromium.connect(browserlessUrl);
-            onStep?.({ type: 'debug', message: '✅ Conectado a Browserless exitosamente' });
+            try {
+                browser = await chromium.connect(browserlessUrl);
+                onStep?.({ type: 'debug', message: '✅ Conectado a Browserless exitosamente' });
+            } catch (err: any) {
+                onStep?.({ type: 'error', message: `❌ Error conectando a Browserless: ${err.message}` });
+                throw err;
+            }
         } else {
             // Ejecución local (localhost o Railway/Render)
             onStep?.({ type: 'debug', message: '💻 Lanzando browser local...' });
