@@ -1438,6 +1438,47 @@ export default function Dashboard() {
                       Procesar y Clasificar
                     </Button>
 
+                    {/* Botón Guardar Snapshot Mensual */}
+                    <Button
+                      onClick={async () => {
+                        if (confirm('¿Guardar snapshot mensual de las métricas actuales?')) {
+                          setLoading(true);
+                          try {
+                            const now = new Date();
+                            const res = await fetch('/api/snapshot', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                unidad: campusSeleccionado === 'Global' ? undefined : campusSeleccionado,
+                                mes: now.getMonth() + 1,
+                                anio: now.getFullYear()
+                              })
+                            });
+                            const data = await res.json();
+                            if (res.ok) {
+                              alert(`✅ Snapshot guardado: ${data.fecha}\n${data.grupos} grupos procesados`);
+                            } else {
+                              alert(`❌ Error: ${data.error}`);
+                            }
+                          } catch (err) {
+                            alert('❌ Error guardando snapshot');
+                          }
+                          setLoading(false);
+                        }
+                      }}
+                      disabled={loading || !importStatus || importStatus.clasificados === 0}
+                      className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600"
+                    >
+                      {loading ? (
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                        </svg>
+                      )}
+                      Guardar Snapshot Mensual
+                    </Button>
+
                     {/* Botón Peligroso: Reset */}
                     <Button
                       variant="ghost"
