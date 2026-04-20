@@ -983,25 +983,40 @@ export async function syncFromInnovat(
     let browser: Browser | null = null;
 
     try {
-        // FIX MEMORIA: Forzar GC de Node.js antes de lanzar el browser
-        if (global.gc) {
-            global.gc();
-            onStep?.({ type: 'debug', message: '🧹 GC manual ejecutado antes de lanzar browser' });
-        }
+        // Detectar si estamos en Vercel y usar Browserless
+        const isVercel = process.env.VERCEL === '1';
+        const browserlessToken = process.env.BROWSERLESS_TOKEN;
 
-        browser = await chromium.launch({
-            headless: true, // Siempre headless en producción para ahorrar memoria
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',       // Usar /tmp en vez de /dev/shm (más RAM en Render)
-                '--disable-gpu',
-                '--disable-animations',
-                '--disable-blink-features=AutomationControlled',
-                // CRÍTICO: NO usar --single-process (causa crashes y más consumo de memoria)
-                // CRÍTICO: NO usar --memory-pressure-off (contraproducente, bloquea el GC)
-                '--disable-background-networking',
-                '--disable-background-timer-throttling',
+        if (isVercel && browserlessToken) {
+            // Conectar a Browserless en Vercel
+            const browserlessUrl = `wss://chrome.browserless.io?token=${browserlessToken}`;
+            onStep?.({ type: 'debug', message: '🌐 Conectando a Browserless (Vercel)...' });
+            
+            browser = await chromium.connect(browserlessUrl);
+            onStep?.({ type: 'debug', message: '✅ Conectado a Browserless exitosamente' });
+        } else {
+            // Ejecución local (localhost o Railway/Render)
+            onStep?.({ type: 'debug', message: '💻 Lanzando browser local...' });
+            
+            // FIX MEMORIA: Forzar GC de Node.js antes de lanzar el browser
+            if (global.gc) {
+                global.gc();
+                onStep?.({ type: 'debug', message: '🧹 GC manual ejecutado antes de lanzar browser' });
+            }
+
+            browser = await chromium.launch({
+                headless: true, // Siempre headless en producción para ahorrar memoria
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',       // Usar /tmp en vez de /dev/shm (más RAM en Render)
+                    '--disable-gpu',
+                    '--disable-animations',
+                    '--disable-blink-features=AutomationControlled',
+                    // CRÍTICO: NO usar --single-process (causa crashes y más consumo de memoria)
+                    // CRÍTICO: NO usar --memory-pressure-off (contraproducente, bloquea el GC)
+                    '--disable-background-networking',
+                    '--disable-background-timer-throttling',
                 '--disable-backgrounding-occluded-windows',
                 '--disable-breakpad',
                 '--disable-component-extensions-with-background-pages',
@@ -1029,7 +1044,8 @@ export async function syncFromInnovat(
                 // FIX: Limitar memoria del proceso de JS del renderer
                 '--js-flags=--max-old-space-size=256 --expose-gc',
             ],
-        });
+            });
+        }
 
         const context = await browser.newContext({
             acceptDownloads: true,
