@@ -20,7 +20,7 @@ const INNOVAT_USER = process.env.INNOVAT_USER || 'prueba.diaz';
 const INNOVAT_PASS = process.env.INNOVAT_PASS || '123456';
 const INNOVAT_SCHOOL = process.env.INNOVAT_SCHOOL || 'Colegio Cambridge de Monterrey';
 
-export const CAMPUS_LIST = ['ANÁHUAC','DOMINIO', 'MITRAS', 'NORTE', 'CUMBRES'];
+export const CAMPUS_LIST = ['DOMINIO', 'MITRAS', 'NORTE', 'CUMBRES','ANÁHUAC'];
 
 // Nota: Innovat muestra "ANÁHUAC" con acento — la búsqueda normaliza acentos automáticamente
 const CICLOS = ['2025-2026', '2026-2027'] as const;
