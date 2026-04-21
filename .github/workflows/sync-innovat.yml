@@ -2,15 +2,13 @@ name: Sync Innovat Diario
 
 on:
   schedule:
-    # 8:00 AM hora Monterrey (UTC-6) = 14:00 UTC
-    # Lunes a viernes
     - cron: '0 14 * * 1-5'
-  workflow_dispatch: # Permite ejecutarlo manualmente desde GitHub
+  workflow_dispatch:
 
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 120 # 2 horas máximo (campus grandes tardan)
+    timeout-minutes: 120
 
     steps:
       - name: Checkout código
@@ -36,8 +34,7 @@ jobs:
           INNOVAT_PASS: ${{ secrets.INNOVAT_PASS }}
           INNOVAT_SCHOOL: ${{ secrets.INNOVAT_SCHOOL }}
           NODE_ENV: production
-          # Sin BROWSERLESS_TOKEN → usará Chromium local (sin límite de tiempo)
-        run: node --expose-gc scripts/sync-innovat.mjs
+        run: npx tsx scripts/sync-innovat.ts
 
       - name: Subir logs de debug si hay error
         if: failure()
