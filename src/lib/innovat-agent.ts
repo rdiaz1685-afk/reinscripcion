@@ -428,6 +428,12 @@ let gralalumnosReqBody: string | null = null;
 let gralalumnosReqUrl: string | null = null;
 let gralalumnosReqHeaders: Record<string, string> = {};
 
+function resetGralalumnosVars() {
+    gralalumnosReqBody = null;
+    gralalumnosReqUrl = null;
+    gralalumnosReqHeaders = {};
+}
+
 // ─── Fetch Directo a API (Producción) ────────────────────────────────────────
 // Hacer fetch directo a la API de Innovat que devuelve JSON y guardarlo en BD
 async function ejecutarFallbackDirecto(
@@ -1179,6 +1185,9 @@ export async function syncFromInnovat(
                     }
                     esPrimeraCombinacion = false;
 
+                    // Resetear variables globales del interceptor para evitar datos del campus anterior
+                    resetGralalumnosVars();
+
                     // ── 2a. Cambiar campus/ciclo en el header
                     await cambiarCampusCiclo(page, campus, ciclo, onStep);
                     
@@ -1400,6 +1409,21 @@ export async function syncFromInnovat(
                     if (descargado) {
                         downloadedFiles.push(filePath);
                         onStep?.({ type: 'downloaded', campus, ciclo, path: filePath });
+                        
+                        // ── Leer Excel y guardar en Turso ──
+                        try {
+                            const fileBuffer = await import('fs/promises').then(fs => fs.readFile(filePath));
+                            const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+                            const sheetName = workbook.SheetNames[0];
+                            const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+                            if (jsonData.length > 0) {
+                                await procesarYGuardarDatos(jsonData, campus, ciclo, onStep);
+                            } else {
+                                onStep?.({ type: 'debug', message: `⚠️ Excel vacío para ${campus} ${ciclo}` });
+                            }
+                        } catch (saveErr) {
+                            onStep?.({ type: 'error', message: `Error guardando en Turso ${campus} ${ciclo}: ${saveErr}` });
+                        }
                     } else {
                         // Si el interceptor falló, guardar HTML para investigar
                         await saveHtml(page, `fallo_${campus}_${cicloCorto(ciclo)}`);
