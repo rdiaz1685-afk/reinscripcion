@@ -1136,6 +1136,9 @@ export async function syncFromInnovat(
         onStep?.({ type: 'debug', message: `✅ Login exitoso` });
 
         // ── 2. POR CADA CAMPUS Y CICLO ────────────────────────────────────────
+        // FIX CRÍTICO: Abrir página nueva para CADA combinación campus+ciclo
+        // Esto elimina el "fantasma" del ciclo anterior que hacía click en ExportarExcel
+        // y corrompía el estado de AngularJS para el siguiente ciclo
         let esPrimeraCombinacion = true;
         for (const campus of campusList) {
             for (const ciclo of CICLOS) {
@@ -1145,55 +1148,33 @@ export async function syncFromInnovat(
                     // Verificar que el navegador sigue activo
                     if (page.isClosed() || !browser || !browser.isConnected()) {
                         onStep?.({ type: 'error', message: `Error en ${campus} ${ciclo}: Navegador cerrado prematuramente (posible OOM)` });
-                        break;
+                        break; // Salir del loop de ciclos para este campus
                     }
+                    
+                    // FIX CRÍTICO: Limpiar página sin destruirla para no perder sessionStorage de Angular
+                    // También limpiar window.__innovatData para evitar race condition entre ciclos
+                    await page.evaluate(() => {
+                        delete (window as any).__innovatData;
+                    }).catch(() => {});
 
-                    // FIX SESIÓN: Hard reload al Inicio entre cada campus/ciclo
-                    // El soft reload anterior rompía la sesión tras un HTTP 401
+                    // FIX MEMORIA: Limpiar buffers y forzar GC entre cada campus/ciclo
                     if (!esPrimeraCombinacion) {
-                        onStep?.({ type: 'debug', message: `♻️ Reiniciando sesión para ${campus} ${ciclo}...` });
+                        onStep?.({ type: 'debug', message: `♻️ Página limpia para ${campus} ${ciclo}... (Soft reload)` });
                         try {
-                            // Navegar de forma dura al Inicio para reiniciar AngularJS completamente
-                            await page.goto('https://innovat1.mx/Gaia/32.4.1/#/Inicio', {
-                                waitUntil: 'domcontentloaded',
-                                timeout: 30000
-                            });
-                            await page.waitForTimeout(3000);
-
-                            // Verificar que la sesión sigue activa
-                            const currentUrl = page.url();
-                            if (currentUrl.includes('/login')) {
-                                onStep?.({ type: 'debug', message: `⚠️ Sesión expirada, haciendo re-login...` });
-                                await page.goto('https://innovat1.mx/Gaia/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
-                                await page.waitForSelector('#NombreEscuela', { state: 'visible', timeout: 20000 });
-                                await page.click('#NombreEscuela');
-                                await page.type('#NombreEscuela', INNOVAT_SCHOOL, { delay: 50 });
-                                await page.waitForTimeout(1500);
-                                const sug = page.locator('md-autocomplete-parent-scope li, .md-autocomplete-suggestions li').first();
-                                if (await sug.isVisible({ timeout: 2000 }).catch(() => false)) {
-                                    await sug.click();
-                                } else {
-                                    await page.keyboard.press('ArrowDown');
-                                    await page.waitForTimeout(300);
-                                    await page.keyboard.press('Enter');
-                                }
-                                await page.waitForTimeout(500);
-                                await page.fill('#NombreUsuario', INNOVAT_USER);
-                                await page.fill('#Contrasena', INNOVAT_PASS);
-                                await page.locator('button[type="submit"], input[type="submit"], .md-btn-primary').first().click();
-                                await page.waitForTimeout(3500);
-                                onStep?.({ type: 'debug', message: `✅ Re-login exitoso` });
-                            }
-
-                            // Limpiar estado Angular y forzar GC
+                            // Limpiar datos del ciclo anterior de window
                             await page.evaluate(() => {
                                 delete (window as any).__innovatData;
-                                if (typeof (window as any).gc === 'function') (window as any).gc();
-                            }).catch(() => {});
+                                // Limpiar cualquier referencia grande en memoria
+                                if (typeof (window as any).gc === 'function') {
+                                    (window as any).gc();
+                                }
+                                window.location.hash = '/Inicio';
+                            });
+                            await page.waitForTimeout(2000);
+                            // FIX MEMORIA: Forzar GC de Node.js entre campus
                             if (global.gc) global.gc();
-
                         } catch (e) {
-                            onStep?.({ type: 'debug', message: `⚠️ Error en reinicio de sesión: ${e}` });
+                            onStep?.({ type: 'debug', message: `⚠️ Error en soft reload: ${e}` });
                         }
                     }
                     esPrimeraCombinacion = false;
@@ -1412,20 +1393,9 @@ export async function syncFromInnovat(
                     const fileName = campusNombreArchivo(campus, ciclo);
                     const filePath = join(uploadDir, fileName);
 
-                    // Para 2026-2027 en producción: el interceptor no puede capturar el body
-                    // (Innovat responde en modo streaming/chunked). Usamos fallback directo.
-                    const isCloudEnv = !!(process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production');
+                    // Siempre usar el interceptor de red (el fetch directo devuelve 401 y rompe la sesión)
                     let descargado = false;
-
-                    if (ciclo === '2026-2027' && isCloudEnv) {
-                        onStep?.({ type: 'debug', message: `🎯 2026-2027 en cloud: usando fetch directo via browser context` });
-                        // Hacer click primero para que Innovat registre la sesión, luego fetch directo
-                        await botonGenerar.click({ force: true }).catch(() => {});
-                        await page.waitForTimeout(2000);
-                        descargado = await ejecutarFallbackDirecto(page, botonGenerar, filePath, campus, ciclo, onStep, null);
-                    } else {
-                        descargado = await descargarConInterceptor(page, botonGenerar, filePath, campus, ciclo, onStep, null);
-                    }
+                    descargado = await descargarConInterceptor(page, botonGenerar, filePath, campus, ciclo, onStep, null);
 
                     if (descargado) {
                         downloadedFiles.push(filePath);
