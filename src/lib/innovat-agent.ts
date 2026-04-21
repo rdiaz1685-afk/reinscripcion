@@ -1136,9 +1136,6 @@ export async function syncFromInnovat(
         onStep?.({ type: 'debug', message: `✅ Login exitoso` });
 
         // ── 2. POR CADA CAMPUS Y CICLO ────────────────────────────────────────
-        // FIX CRÍTICO: Abrir página nueva para CADA combinación campus+ciclo
-        // Esto elimina el "fantasma" del ciclo anterior que hacía click en ExportarExcel
-        // y corrompía el estado de AngularJS para el siguiente ciclo
         let esPrimeraCombinacion = true;
         for (const campus of campusList) {
             for (const ciclo of CICLOS) {
@@ -1148,33 +1145,55 @@ export async function syncFromInnovat(
                     // Verificar que el navegador sigue activo
                     if (page.isClosed() || !browser || !browser.isConnected()) {
                         onStep?.({ type: 'error', message: `Error en ${campus} ${ciclo}: Navegador cerrado prematuramente (posible OOM)` });
-                        break; // Salir del loop de ciclos para este campus
+                        break;
                     }
-                    
-                    // FIX CRÍTICO: Limpiar página sin destruirla para no perder sessionStorage de Angular
-                    // También limpiar window.__innovatData para evitar race condition entre ciclos
-                    await page.evaluate(() => {
-                        delete (window as any).__innovatData;
-                    }).catch(() => {});
 
-                    // FIX MEMORIA: Limpiar buffers y forzar GC entre cada campus/ciclo
+                    // FIX SESIÓN: Hard reload al Inicio entre cada campus/ciclo
+                    // El soft reload anterior rompía la sesión tras un HTTP 401
                     if (!esPrimeraCombinacion) {
-                        onStep?.({ type: 'debug', message: `♻️ Página limpia para ${campus} ${ciclo}... (Soft reload)` });
+                        onStep?.({ type: 'debug', message: `♻️ Reiniciando sesión para ${campus} ${ciclo}...` });
                         try {
-                            // Limpiar datos del ciclo anterior de window
+                            // Navegar de forma dura al Inicio para reiniciar AngularJS completamente
+                            await page.goto('https://innovat1.mx/Gaia/32.4.1/#/Inicio', {
+                                waitUntil: 'domcontentloaded',
+                                timeout: 30000
+                            });
+                            await page.waitForTimeout(3000);
+
+                            // Verificar que la sesión sigue activa
+                            const currentUrl = page.url();
+                            if (currentUrl.includes('/login')) {
+                                onStep?.({ type: 'debug', message: `⚠️ Sesión expirada, haciendo re-login...` });
+                                await page.goto('https://innovat1.mx/Gaia/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
+                                await page.waitForSelector('#NombreEscuela', { state: 'visible', timeout: 20000 });
+                                await page.click('#NombreEscuela');
+                                await page.type('#NombreEscuela', INNOVAT_SCHOOL, { delay: 50 });
+                                await page.waitForTimeout(1500);
+                                const sug = page.locator('md-autocomplete-parent-scope li, .md-autocomplete-suggestions li').first();
+                                if (await sug.isVisible({ timeout: 2000 }).catch(() => false)) {
+                                    await sug.click();
+                                } else {
+                                    await page.keyboard.press('ArrowDown');
+                                    await page.waitForTimeout(300);
+                                    await page.keyboard.press('Enter');
+                                }
+                                await page.waitForTimeout(500);
+                                await page.fill('#NombreUsuario', INNOVAT_USER);
+                                await page.fill('#Contrasena', INNOVAT_PASS);
+                                await page.locator('button[type="submit"], input[type="submit"], .md-btn-primary').first().click();
+                                await page.waitForTimeout(3500);
+                                onStep?.({ type: 'debug', message: `✅ Re-login exitoso` });
+                            }
+
+                            // Limpiar estado Angular y forzar GC
                             await page.evaluate(() => {
                                 delete (window as any).__innovatData;
-                                // Limpiar cualquier referencia grande en memoria
-                                if (typeof (window as any).gc === 'function') {
-                                    (window as any).gc();
-                                }
-                                window.location.hash = '/Inicio';
-                            });
-                            await page.waitForTimeout(2000);
-                            // FIX MEMORIA: Forzar GC de Node.js entre campus
+                                if (typeof (window as any).gc === 'function') (window as any).gc();
+                            }).catch(() => {});
                             if (global.gc) global.gc();
+
                         } catch (e) {
-                            onStep?.({ type: 'debug', message: `⚠️ Error en soft reload: ${e}` });
+                            onStep?.({ type: 'debug', message: `⚠️ Error en reinicio de sesión: ${e}` });
                         }
                     }
                     esPrimeraCombinacion = false;
