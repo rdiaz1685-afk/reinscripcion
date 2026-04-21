@@ -29,7 +29,7 @@ const CICLOS = ['2025-2026', '2026-2027'] as const;
 // Estos IDs se obtienen de la sección "Control" de Innovat donde se dan de alta los ciclos escolares
 const UNIT_IDS: Record<string, Record<string, string>> = {
     '2025-2026': {
-        'ANAHUAC': '49',
+        'ANÁHUAC': '49',
         'CUMBRES': '50',
         'DOMINIO': '51',
         'MITRAS': '52',
@@ -40,7 +40,7 @@ const UNIT_IDS: Record<string, Record<string, string>> = {
         'CUMBRES': '55',
         'DOMINIO': '56',
         'MITRAS': '57',
-        'ANAHUAC': '58',
+        'ANÁHUAC': '58',
     },
 };
 
@@ -762,7 +762,7 @@ async function descargarConInterceptor(
             // AngularJS puede enviar "-1" como string, lo que hace que Innovat no responda
             let bodyToUse: string;
             try {
-                const rawBody = gralalumnosReqBody || JSON.stringify(templateBody);
+                const rawBody = JSON.stringify(templateBody); // Siempre usar el templateBody con el unitId correcto
                 const parsedBody = JSON.parse(rawBody);
                 if (typeof parsedBody.Estatus === 'string') {
                     parsedBody.Estatus = parseInt(parsedBody.Estatus, 10);
