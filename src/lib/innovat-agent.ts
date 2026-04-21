@@ -20,7 +20,7 @@ const INNOVAT_USER = process.env.INNOVAT_USER || 'prueba.diaz';
 const INNOVAT_PASS = process.env.INNOVAT_PASS || '123456';
 const INNOVAT_SCHOOL = process.env.INNOVAT_SCHOOL || 'Colegio Cambridge de Monterrey';
 
-export const CAMPUS_LIST = ['DOMINIO', 'MITRAS', 'NORTE', 'CUMBRES', 'ANAHUAC'];
+export const CAMPUS_LIST = ['ANÁHUAC','DOMINIO', 'MITRAS', 'NORTE', 'CUMBRES'];
 
 // Nota: Innovat muestra "ANÁHUAC" con acento — la búsqueda normaliza acentos automáticamente
 const CICLOS = ['2025-2026', '2026-2027'] as const;
@@ -449,7 +449,7 @@ async function ejecutarFallbackDirecto(
             return false;
         }
         
-        onStep?.({ type: 'debug', message: `� Usando unit ID ${unitId} para ${campus} ${ciclo}` });
+        onStep?.({ type: 'debug', message: `  Usando unit ID ${unitId} para ${campus} ${ciclo}` });
         
         // API URL de Innovat
         const apiUrl = 'https://innovat1.mx/Gaia/32.3.1/api/gralalumnos';
