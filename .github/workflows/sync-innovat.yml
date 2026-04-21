@@ -1,0 +1,48 @@
+name: Sync Innovat Diario
+
+on:
+  schedule:
+    # 8:00 AM hora Monterrey (UTC-6) = 14:00 UTC
+    # Lunes a viernes
+    - cron: '0 14 * * 1-5'
+  workflow_dispatch: # Permite ejecutarlo manualmente desde GitHub
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120 # 2 horas máximo (campus grandes tardan)
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Instalar Playwright + Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Ejecutar sync de Innovat
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          INNOVAT_USER: ${{ secrets.INNOVAT_USER }}
+          INNOVAT_PASS: ${{ secrets.INNOVAT_PASS }}
+          INNOVAT_SCHOOL: ${{ secrets.INNOVAT_SCHOOL }}
+          NODE_ENV: production
+          # Sin BROWSERLESS_TOKEN → usará Chromium local (sin límite de tiempo)
+        run: node --expose-gc scripts/sync-innovat.mjs
+
+      - name: Subir logs de debug si hay error
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-logs
+          path: upload/debug/
+          retention-days: 3
