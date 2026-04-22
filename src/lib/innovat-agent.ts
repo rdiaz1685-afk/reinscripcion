@@ -305,18 +305,19 @@ async function cambiarCampusCiclo(
 
         const clicked = await page.evaluate(({ campusN, cicloT }: { campusN: string; cicloT: string }) => {
             const opts = Array.from(document.querySelectorAll('.uk-dropdown a, .uk-nav a, .uk-dropdown li a')) as HTMLElement[];
-            
-            // Normalizar acentos para comparación (ANÁHUAC vs ANAHUAC)
-            const normalize = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
-            const campusNorm = normalize(campusN);
+            // Normalizar sin función nombrada para evitar error __name en browser context
+            const campusNorm = campusN.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
             
             let target = opts.find(o => {
-                const txt = normalize(o.innerText?.trim() || '');
-                return txt?.includes(campusNorm) && txt?.includes(cicloT);
+                const txt = (o.innerText?.trim() || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+                return txt.includes(campusNorm) && txt.includes(cicloT);
             });
 
             if (!target) {
-                target = opts.find(o => normalize(o.innerText?.trim() || '').includes(campusNorm));
+                target = opts.find(o => {
+                    const txt = (o.innerText?.trim() || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+                    return txt.includes(campusNorm);
+                });
             }
 
             if (target) {
