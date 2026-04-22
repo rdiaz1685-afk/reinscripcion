@@ -29,7 +29,7 @@ const CICLOS = ['2025-2026', '2026-2027'] as const;
 // Estos IDs se obtienen de la sección "Control" de Innovat donde se dan de alta los ciclos escolares
 const UNIT_IDS: Record<string, Record<string, string>> = {
     '2025-2026': {
-        'ANAHUAC': '49',
+        'ANÁHUAC': '49',
         'CUMBRES': '50',
         'DOMINIO': '51',
         'MITRAS': '52',
@@ -40,7 +40,7 @@ const UNIT_IDS: Record<string, Record<string, string>> = {
         'CUMBRES': '55',
         'DOMINIO': '56',
         'MITRAS': '57',
-        'ANAHUAC': '58',
+        'ANÁHUAC': '58',
     },
 };
 
@@ -290,7 +290,7 @@ async function cambiarCampusCiclo(
     await page.waitForTimeout(400);
 
     // Buscar el trigger del campus actual en la navbar
-    const trigger = page.locator('.uk-navbar-nav, .header').locator('a, span').filter({ hasText: /NORTE|CUMBRES|MITRAS|ANAHUAC|DOMINIO/i }).first();
+    const trigger = page.locator('.uk-navbar-nav, .header').locator('a, span').filter({ hasText: /NORTE|CUMBRES|MITRAS|AN[AÁ]HUAC|DOMINIO/i }).first();
     
     if (await trigger.isVisible()) {
         const triggerText = (await trigger.innerText()).toUpperCase();
@@ -306,13 +306,17 @@ async function cambiarCampusCiclo(
         const clicked = await page.evaluate(({ campusN, cicloT }: { campusN: string; cicloT: string }) => {
             const opts = Array.from(document.querySelectorAll('.uk-dropdown a, .uk-nav a, .uk-dropdown li a')) as HTMLElement[];
             
+            // Normalizar acentos para comparación (ANÁHUAC vs ANAHUAC)
+            const normalize = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+            const campusNorm = normalize(campusN);
+            
             let target = opts.find(o => {
-                const txt = o.innerText?.trim().toUpperCase();
-                return txt?.includes(campusN.toUpperCase()) && txt?.includes(cicloT);
+                const txt = normalize(o.innerText?.trim() || '');
+                return txt?.includes(campusNorm) && txt?.includes(cicloT);
             });
 
             if (!target) {
-                target = opts.find(o => o.innerText?.trim().toUpperCase().includes(campusN.toUpperCase()));
+                target = opts.find(o => normalize(o.innerText?.trim() || '').includes(campusNorm));
             }
 
             if (target) {
@@ -684,7 +688,7 @@ async function descargarConInterceptor(
         page.on('response', responseHandler);
 
         const isCloudEnv = !!(process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production');
-        const esCampusGrande = campus === 'CUMBRES' || campus === 'ANAHUAC';
+        const esCampusGrande = campus === 'CUMBRES' || campus === 'ANÁHUAC';
         const timeoutDuration = isCloudEnv
             ? (esCampusGrande ? 45_000 : 30_000)  // Tiempo real para motor interno en producción
             : (ciclo === '2026-2027'
@@ -1384,7 +1388,7 @@ export async function syncFromInnovat(
                     // Para ciclo 2026-2027, especialmente CUMBRES y ANAHUAC, el formulario necesita
                     // tiempo adicional para procesar todos los cambios antes de hacer click en GENERAR
                     if (ciclo === '2026-2027') {
-                        const tiempoEsperaFormulario = campus === 'CUMBRES' || campus === 'ANAHUAC' ? 3000 : 2000;
+                        const tiempoEsperaFormulario = campus === 'CUMBRES' || campus === 'ANÁHUAC' ? 3000 : 2000;
                         onStep?.({ type: 'debug', message: `⏳ Esperando ${tiempoEsperaFormulario}ms para que el formulario se actualice...` });
                         await page.waitForTimeout(tiempoEsperaFormulario);
                     }
@@ -1393,18 +1397,9 @@ export async function syncFromInnovat(
                     const fileName = campusNombreArchivo(campus, ciclo);
                     const filePath = join(uploadDir, fileName);
 
-                    // En cloud: click en GENERAR para autorizar sesión + fetch directo con unit ID correcto
-                    // En local: usar el interceptor que funciona correctamente
-                    const isCloudEnv = !!(process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production');
+                    // Siempre usar el interceptor de red (el fetch directo devuelve 401 y rompe la sesión)
                     let descargado = false;
-                    if (isCloudEnv) {
-                        // Click primero para que Innovat registre la sesión y autorice el fetch
-                        await botonGenerar.click({ force: true }).catch(() => {});
-                        await page.waitForTimeout(2000);
-                        descargado = await ejecutarFallbackDirecto(page, botonGenerar, filePath, campus, ciclo, onStep, null);
-                    } else {
-                        descargado = await descargarConInterceptor(page, botonGenerar, filePath, campus, ciclo, onStep, null);
-                    }
+                    descargado = await descargarConInterceptor(page, botonGenerar, filePath, campus, ciclo, onStep, null);
 
                     if (descargado) {
                         downloadedFiles.push(filePath);
