@@ -20,7 +20,7 @@ const INNOVAT_USER = process.env.INNOVAT_USER || 'prueba.diaz';
 const INNOVAT_PASS = process.env.INNOVAT_PASS || '123456';
 const INNOVAT_SCHOOL = process.env.INNOVAT_SCHOOL || 'Colegio Cambridge de Monterrey';
 
-export const CAMPUS_LIST = ['DOMINIO', 'MITRAS', 'NORTE', 'CUMBRES','ANÁHUAC'];
+export const CAMPUS_LIST = ['ANÁHUAC','DOMINIO', 'MITRAS', 'NORTE', 'CUMBRES'];
 
 // Nota: Innovat muestra "ANÁHUAC" con acento — la búsqueda normaliza acentos automáticamente
 const CICLOS = ['2025-2026', '2026-2027'] as const;
@@ -29,7 +29,7 @@ const CICLOS = ['2025-2026', '2026-2027'] as const;
 // Estos IDs se obtienen de la sección "Control" de Innovat donde se dan de alta los ciclos escolares
 const UNIT_IDS: Record<string, Record<string, string>> = {
     '2025-2026': {
-        'ANÁHUAC': '49',
+        'ANAHUAC': '49',
         'CUMBRES': '50',
         'DOMINIO': '51',
         'MITRAS': '52',
@@ -40,7 +40,7 @@ const UNIT_IDS: Record<string, Record<string, string>> = {
         'CUMBRES': '55',
         'DOMINIO': '56',
         'MITRAS': '57',
-        'ANÁHUAC': '58',
+        'ANAHUAC': '58',
     },
 };
 
@@ -428,12 +428,6 @@ let gralalumnosReqBody: string | null = null;
 let gralalumnosReqUrl: string | null = null;
 let gralalumnosReqHeaders: Record<string, string> = {};
 
-function resetGralalumnosVars() {
-    gralalumnosReqBody = null;
-    gralalumnosReqUrl = null;
-    gralalumnosReqHeaders = {};
-}
-
 // ─── Fetch Directo a API (Producción) ────────────────────────────────────────
 // Hacer fetch directo a la API de Innovat que devuelve JSON y guardarlo en BD
 async function ejecutarFallbackDirecto(
@@ -762,7 +756,7 @@ async function descargarConInterceptor(
             // AngularJS puede enviar "-1" como string, lo que hace que Innovat no responda
             let bodyToUse: string;
             try {
-                const rawBody = JSON.stringify(templateBody); // Siempre usar el templateBody con el unitId correcto
+                const rawBody = gralalumnosReqBody || JSON.stringify(templateBody);
                 const parsedBody = JSON.parse(rawBody);
                 if (typeof parsedBody.Estatus === 'string') {
                     parsedBody.Estatus = parseInt(parsedBody.Estatus, 10);
@@ -1185,9 +1179,6 @@ export async function syncFromInnovat(
                     }
                     esPrimeraCombinacion = false;
 
-                    // Resetear variables globales del interceptor para evitar datos del campus anterior
-                    resetGralalumnosVars();
-
                     // ── 2a. Cambiar campus/ciclo en el header
                     await cambiarCampusCiclo(page, campus, ciclo, onStep);
                     
@@ -1402,28 +1393,19 @@ export async function syncFromInnovat(
                     const fileName = campusNombreArchivo(campus, ciclo);
                     const filePath = join(uploadDir, fileName);
 
-                    // Siempre usar el interceptor de red (el fetch directo devuelve 401 y rompe la sesión)
+                    // En cloud usar el motor interno directo (interceptor captura datos cacheados de ANÁHUAC)
+                    // En local usar el interceptor que funciona correctamente
+                    const isCloudEnv = !!(process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production');
                     let descargado = false;
-                    descargado = await descargarConInterceptor(page, botonGenerar, filePath, campus, ciclo, onStep, null);
+                    if (isCloudEnv) {
+                        descargado = await ejecutarFallbackDirecto(page, botonGenerar, filePath, campus, ciclo, onStep, null);
+                    } else {
+                        descargado = await descargarConInterceptor(page, botonGenerar, filePath, campus, ciclo, onStep, null);
+                    }
 
                     if (descargado) {
                         downloadedFiles.push(filePath);
                         onStep?.({ type: 'downloaded', campus, ciclo, path: filePath });
-                        
-                        // ── Leer Excel y guardar en Turso ──
-                        try {
-                            const fileBuffer = await import('fs/promises').then(fs => fs.readFile(filePath));
-                            const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
-                            const sheetName = workbook.SheetNames[0];
-                            const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-                            if (jsonData.length > 0) {
-                                await procesarYGuardarDatos(jsonData, campus, ciclo, onStep);
-                            } else {
-                                onStep?.({ type: 'debug', message: `⚠️ Excel vacío para ${campus} ${ciclo}` });
-                            }
-                        } catch (saveErr) {
-                            onStep?.({ type: 'error', message: `Error guardando en Turso ${campus} ${ciclo}: ${saveErr}` });
-                        }
                     } else {
                         // Si el interceptor falló, guardar HTML para investigar
                         await saveHtml(page, `fallo_${campus}_${cicloCorto(ciclo)}`);
