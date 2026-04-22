@@ -1393,11 +1393,14 @@ export async function syncFromInnovat(
                     const fileName = campusNombreArchivo(campus, ciclo);
                     const filePath = join(uploadDir, fileName);
 
-                    // En cloud usar el motor interno directo (interceptor captura datos cacheados de ANÁHUAC)
-                    // En local usar el interceptor que funciona correctamente
+                    // En cloud: click en GENERAR para autorizar sesión + fetch directo con unit ID correcto
+                    // En local: usar el interceptor que funciona correctamente
                     const isCloudEnv = !!(process.env.RENDER_ENVIRONMENT || process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production');
                     let descargado = false;
                     if (isCloudEnv) {
+                        // Click primero para que Innovat registre la sesión y autorice el fetch
+                        await botonGenerar.click({ force: true }).catch(() => {});
+                        await page.waitForTimeout(2000);
                         descargado = await ejecutarFallbackDirecto(page, botonGenerar, filePath, campus, ciclo, onStep, null);
                     } else {
                         descargado = await descargarConInterceptor(page, botonGenerar, filePath, campus, ciclo, onStep, null);
